@@ -1,0 +1,26 @@
+# dependencies
+/node_modules
+
+# Next.js
+/.next
+/out
+
+# build and cache output
+/build
+/.cache
+*.tsbuildinfo
+next-env.d.ts
+
+# environment files (allow a documented example later)
+.env*
+!.env.example
+
+# logs
+*.log
+pnpm-debug.log*
+
+# editor and OS files
+.DS_Store
+.idea
+.vscode
+*.swp
