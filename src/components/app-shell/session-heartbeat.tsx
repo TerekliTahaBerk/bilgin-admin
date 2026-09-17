@@ -1,15 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { createSessionHeartbeatController } from "@/components/app-shell/session-heartbeat-controller";
+import type { SafeAdmin } from "@/contracts/admin/session";
 import { getSession } from "@/features/auth/session-client";
 
 export const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
-export function SessionHeartbeat() {
+type SessionHeartbeatProps = Readonly<{
+  onSessionSuccess?: (admin: SafeAdmin) => void;
+}>;
+
+export function SessionHeartbeat({ onSessionSuccess }: SessionHeartbeatProps) {
   const router = useRouter();
+  const onSessionSuccessRef = useRef(onSessionSuccess);
+
+  useEffect(() => {
+    onSessionSuccessRef.current = onSessionSuccess;
+  }, [onSessionSuccess]);
 
   useEffect(() => {
     const heartbeat = createSessionHeartbeatController({
@@ -17,6 +27,9 @@ export function SessionHeartbeat() {
       onAuthenticationFailure: () => {
         router.replace("/login");
         router.refresh();
+      },
+      onSessionSuccess: (admin) => {
+        onSessionSuccessRef.current?.(admin);
       },
     });
 

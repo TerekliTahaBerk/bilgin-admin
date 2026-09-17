@@ -123,3 +123,49 @@ describe("session heartbeat controller", () => {
     await expect(controller.check()).resolves.toBeUndefined();
   });
 });
+
+describe("session heartbeat admin snapshot", () => {
+  it("reports the refreshed admin on a successful check", async () => {
+    const onSessionSuccess = vi.fn();
+    const controller = createSessionHeartbeatController({
+      checkSession: async () => ({ ok: true, admin: safeAdmin }),
+      onAuthenticationFailure: vi.fn(),
+      onSessionSuccess,
+    });
+
+    await controller.check();
+
+    expect(onSessionSuccess).toHaveBeenCalledTimes(1);
+    expect(onSessionSuccess).toHaveBeenCalledWith(safeAdmin);
+  });
+
+  it("does not report a refreshed admin for a failed check", async () => {
+    const onSessionSuccess = vi.fn();
+    const controller = createSessionHeartbeatController({
+      checkSession: async () => ({
+        ok: false,
+        error: { kind: "network", status: null, message: "offline" },
+      }),
+      onAuthenticationFailure: vi.fn(),
+      onSessionSuccess,
+    });
+
+    await controller.check();
+
+    expect(onSessionSuccess).not.toHaveBeenCalled();
+  });
+
+  it("stays silent after dispose", async () => {
+    const onSessionSuccess = vi.fn();
+    const controller = createSessionHeartbeatController({
+      checkSession: async () => ({ ok: true, admin: safeAdmin }),
+      onAuthenticationFailure: vi.fn(),
+      onSessionSuccess,
+    });
+
+    controller.dispose();
+    await controller.check();
+
+    expect(onSessionSuccess).not.toHaveBeenCalled();
+  });
+});

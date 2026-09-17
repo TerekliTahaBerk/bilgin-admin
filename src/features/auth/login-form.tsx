@@ -83,7 +83,7 @@ export function LoginForm() {
           aria-describedby={errors.email ? "email-error" : undefined}
           aria-invalid={errors.email ? "true" : "false"}
           autoComplete="username"
-          className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-200"
+          className="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
           id="email"
           type="email"
         />
@@ -103,7 +103,7 @@ export function LoginForm() {
           aria-describedby={errors.password ? "password-error" : undefined}
           aria-invalid={errors.password ? "true" : "false"}
           autoComplete="current-password"
-          className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-200"
+          className="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
           id="password"
           type="password"
         />
@@ -121,7 +121,7 @@ export function LoginForm() {
       ) : null}
 
       <button
-        className="w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={isSubmitting}
         type="submit"
       >
