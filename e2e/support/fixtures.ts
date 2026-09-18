@@ -1,0 +1,51 @@
+import { sealData } from "iron-session";
+
+export const E2E_APP_PORT = Number(process.env.E2E_APP_PORT ?? 3100);
+export const E2E_MOCK_BACKEND_PORT = Number(
+  process.env.MOCK_BACKEND_PORT ?? 8787,
+);
+export const E2E_BASE_URL = `http://localhost:${E2E_APP_PORT}`;
+export const E2E_SESSION_SECRET =
+  "e2e-session-secret-that-is-at-least-32-characters-long";
+export const E2E_SESSION_COOKIE = "bilgin_admin_session";
+
+// Test-only credentials served by e2e/support/mock-backend.mjs.
+export const E2E_EMAIL = "editor@bilgin.test";
+export const E2E_PASSWORD = "test-password";
+export const E2E_WRONG_PASSWORD = "wrong-password";
+
+export const E2E_ADMIN_NAME = "Taha Berk";
+export const E2E_ADMIN_ROLE_LABEL = "İçerik Editörü";
+
+/**
+ * Builds a structurally valid seal whose payload has already expired, so the
+ * server rejects it even though the browser still sends the cookie. The app's
+ * own session helpers stay server-side: this only reuses iron-session.
+ */
+export function sealExpiredSession(): Promise<string> {
+  const issuedAt = Date.now() - 9 * 60 * 60 * 1000;
+
+  return sealData(
+    {
+      version: 1,
+      backendToken: "expired-e2e-backend-token",
+      admin: {
+        id: "01a0ab9b-0000-4000-8000-00000000ed17",
+        name: E2E_ADMIN_NAME,
+        email: E2E_EMAIL,
+        role: "content_editor",
+        roleLabel: E2E_ADMIN_ROLE_LABEL,
+        abilities: {
+          edit_content: true,
+          publish_content: false,
+          edit_curriculum: false,
+          view_users: false,
+        },
+      },
+      issuedAt,
+      validatedAt: issuedAt,
+      expiresAt: issuedAt + 28800 * 1000,
+    },
+    { password: E2E_SESSION_SECRET, ttl: 0 },
+  );
+}

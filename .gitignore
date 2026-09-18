@@ -24,3 +24,10 @@ pnpm-debug.log*
 .idea
 .vscode
 *.swp
+
+# test and coverage output
+/playwright-report
+/test-results
+/coverage
+/blob-report
+/.playwright
