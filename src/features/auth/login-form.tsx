@@ -73,7 +73,24 @@ export function LoginForm() {
   const onSubmit = handleSubmit(handleValidSubmit);
 
   return (
-    <form className="w-full max-w-sm space-y-5" noValidate onSubmit={onSubmit}>
+    /*
+     * `method="post"` and `action` are the native fallback semantics, not an
+     * alternative login path. A form with no method defaults to GET, so a
+     * submit that lands before React hydrates would copy the password into the
+     * URL — and from there into history, referrers and access logs. POST keeps
+     * the credentials in the request body; the page route does not handle POST,
+     * so the native submit simply fails instead of leaking.
+     *
+     * Once hydrated, onSubmit preventDefaults and the normal
+     * react-hook-form -> loginSession -> POST /api/session/login flow runs.
+     */
+    <form
+      action="/login"
+      className="w-full max-w-sm space-y-5"
+      method="post"
+      noValidate
+      onSubmit={onSubmit}
+    >
       <div>
         <label className="block text-sm font-medium" htmlFor="email">
           E-posta

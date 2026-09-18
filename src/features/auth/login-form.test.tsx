@@ -52,6 +52,19 @@ function submitButton() {
   return screen.getByRole("button", { name: /giriş/i });
 }
 
+describe("LoginForm native fallback semantics", () => {
+  it("submits natively with POST so credentials can never reach the URL", () => {
+    const { container } = render(<LoginForm />);
+    const form = container.querySelector("form");
+
+    expect(form).not.toBeNull();
+    // A form without an explicit method defaults to GET, which would put the
+    // password in the query string on a pre-hydration submit.
+    expect(form!.getAttribute("method")).toBe("post");
+    expect(form!.getAttribute("action")).toBe("/login");
+  });
+});
+
 describe("LoginForm client validation", () => {
   beforeEach(() => {
     loginSession.mockReset();
