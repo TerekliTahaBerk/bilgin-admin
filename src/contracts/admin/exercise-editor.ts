@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { countFillBlankPlaceholders } from "@/lib/content/fill-blank-placeholders";
+
 import { successEnvelopeSchema } from "@/contracts/admin/common";
 import {
   courseScopeSchema,
@@ -63,10 +65,23 @@ export const trueFalseAnswerKeySchema = z.object({
   value: z.boolean(),
 });
 
+export const fillBlankContentSchema = z.object({
+  template: z.string(),
+  // The backend validator reads `$content['choices'] ?? []`, so a stored row
+  // may legitimately omit choices. Normalising to [] keeps that data readable
+  // instead of turning a backend-valid question into a protocol error.
+  choices: z.array(z.string()).default([]),
+});
+
+export const fillBlankAnswerKeySchema = z.object({
+  blanks: z.array(z.string()),
+});
+
 /** The exercise types this editor is allowed to create and update. */
 export const supportedEditorTypeSchema = z.enum([
   "multiple_choice",
   "true_false",
+  "fill_blank",
 ]);
 
 export type SupportedEditorType = z.infer<typeof supportedEditorTypeSchema>;
@@ -101,6 +116,11 @@ const detailShapeByType = {
     content: trueFalseContentSchema,
     answerKey: trueFalseAnswerKeySchema,
     label: "Doğru / yanlış",
+  },
+  fill_blank: {
+    content: fillBlankContentSchema,
+    answerKey: fillBlankAnswerKeySchema,
+    label: "Boşluk doldurma",
   },
 } as const;
 
@@ -158,6 +178,67 @@ export const trueFalseEditableSchema = z.object({
 });
 
 /**
+ * Fill blank is the one type whose validity is cross-field: the template, the
+ * answer list and the choice list only make sense together. These are the
+ * backend FillBlankValidator's own invariants, mirrored here so a tampered
+ * browser body is rejected at the BFF boundary rather than travelling to the
+ * backend. The backend still re-validates and remains the final authority.
+ */
+export const fillBlankEditableSchema = z
+  .object({
+    type: z.literal("fill_blank"),
+    ...commonEditableFields,
+    content: fillBlankContentSchema,
+    answer_key: fillBlankAnswerKeySchema,
+  })
+  .superRefine((value, context) => {
+    const placeholders = countFillBlankPlaceholders(value.content.template);
+
+    if (value.content.template.trim().length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["content", "template"],
+        message: "Cümle şablonu boş olamaz.",
+      });
+    } else if (placeholders === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["content", "template"],
+        message: "Şablon en az bir boşluk içermeli: {{0}}",
+      });
+    }
+
+    const blanks = value.answer_key.blanks;
+
+    if (blanks.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["answer_key", "blanks"],
+        message: "Cevap listesi boş olamaz.",
+      });
+    } else if (placeholders > 0 && blanks.length !== placeholders) {
+      context.addIssue({
+        code: "custom",
+        path: ["answer_key", "blanks"],
+        message: `Şablonda ${placeholders} boşluk var ama ${blanks.length} cevap verilmiş.`,
+      });
+    }
+
+    // Mirrors in_array($blank, $choices, true): strict string equality.
+    if (value.content.choices.length > 0) {
+      for (const [index, blank] of blanks.entries()) {
+        if (!value.content.choices.includes(blank)) {
+          context.addIssue({
+            code: "custom",
+            path: ["answer_key", "blanks", index],
+            message: `Doğru cevap '${blank}' seçenekler arasında yok.`,
+          });
+        }
+      }
+    }
+  });
+
+/**
  * Mutations accept exactly the supported editor union. The other eight types
  * fall through the discriminator and are rejected before any backend call, and
  * the object schemas strip id/status/version/stats/owner_course_id — plus
@@ -166,11 +247,13 @@ export const trueFalseEditableSchema = z.object({
 export const editableExerciseSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema,
   trueFalseEditableSchema,
+  fillBlankEditableSchema,
 ]);
 
 export const createExerciseRequestSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   trueFalseEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  fillBlankEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
 ]);
 
 export const updateExerciseRequestSchema = editableExerciseSchema;
@@ -196,6 +279,7 @@ export type CourseTopicsData = z.infer<typeof courseTopicsDataSchema>;
 export type CourseTopicsResponse = z.infer<typeof courseTopicsResponseSchema>;
 export type MultipleChoiceContent = z.infer<typeof multipleChoiceContentSchema>;
 export type TrueFalseContent = z.infer<typeof trueFalseContentSchema>;
+export type FillBlankContent = z.infer<typeof fillBlankContentSchema>;
 export type EditableExercise = z.infer<typeof editableExerciseSchema>;
 export type ExerciseDetail = z.infer<typeof exerciseDetailDataSchema>;
 export type ExerciseDetailResponse = z.infer<

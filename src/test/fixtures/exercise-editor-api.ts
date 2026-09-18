@@ -75,6 +75,32 @@ export const validTrueFalseDetailResponse = {
   meta: { server_time: "2026-09-18T10:00:00+00:00" },
 };
 
+/** A stored fill blank question with a populated choice list. */
+export const validFillBlankDetailResponse = {
+  data: {
+    id: 3,
+    type: "fill_blank",
+    topic_id: 1,
+    difficulty: 3,
+    content: {
+      template: "Türklerde yazısız hukuk kurallarına {{0}} denir.",
+      choices: ["Töre", "Kurultay", "Toy", "Yuğ"],
+    },
+    answer_key: { blanks: ["Töre"] },
+    explanation: "Töre, yazısız hukuk kurallarının adıdır.",
+    applicable_scopes: ["tyt", "ayt"],
+    status: "published",
+    version: 2,
+    stats: {
+      attempts: 30,
+      correct_rate: 55,
+      avg_seconds: 21,
+      needs_review: false,
+    },
+  },
+  meta: { server_time: "2026-09-18T10:00:00+00:00" },
+};
+
 export const validCreateExerciseResponse = {
   data: { id: 123, status: "draft" },
   meta: { server_time: "2026-09-18T10:00:00+00:00" },

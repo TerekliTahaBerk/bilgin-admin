@@ -16,6 +16,7 @@ import {
 import {
   validCreateExerciseResponse,
   validExerciseDetailResponse,
+  validFillBlankDetailResponse,
   validTopicsResponse,
   validTrueFalseDetailResponse,
   validUpdateExerciseResponse,
@@ -599,6 +600,354 @@ describe("true/false mutations through the real BFF chain", () => {
     expect(payload.data.answer_key).toEqual({ value: false });
     expect(payload.data.content.statement).toBe(
       validTrueFalseDetailResponse.data.content.statement,
+    );
+  });
+});
+
+const fillBlankEditable = {
+  type: "fill_blank",
+  topic_id: 1,
+  difficulty: 2,
+  content: {
+    template: "Türklerde {{0}} adı verilir.",
+    choices: ["Töre", "Kurultay", "Kut"],
+  },
+  answer_key: { blanks: ["Töre"] },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+describe("fill blank mutations through the real BFF chain", () => {
+  it("creates with the exact backend body and strips everything else", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    let authorization: string | null = null;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...fillBlankEditable,
+          owner_unit_id: 12,
+          id: 77,
+          status: "published",
+          version: 9,
+          stats: { attempts: 5 },
+          owner_course_id: 3,
+        },
+        { origin: APP_ORIGIN, authorization: "Bearer attacker" },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...fillBlankEditable, owner_unit_id: 12 });
+    expect(authorization).toBe(`Bearer ${contentEditorFixture.token}`);
+    for (const stripped of [
+      "id",
+      "status",
+      "version",
+      "stats",
+      "owner_course_id",
+    ]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it("creates a multi-blank question with the answers in template order", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...fillBlankEditable,
+          content: {
+            template: "{{0}} ve {{1}} birlikte kullanılır.",
+            choices: ["Töre", "Kut"],
+          },
+          answer_key: { blanks: ["Kut", "Töre"] },
+          owner_unit_id: 12,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({ answer_key: { blanks: ["Kut", "Töre"] } });
+  });
+
+  it("forwards a free-answer body whose choices are empty, as the backend allows", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...fillBlankEditable,
+          content: { template: "Başkent {{0}} şehridir.", choices: [] },
+          answer_key: { blanks: ["Karabalgasun"] },
+          owner_unit_id: 12,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      content: { template: "Başkent {{0}} şehridir.", choices: [] },
+      answer_key: { blanks: ["Karabalgasun"] },
+    });
+  });
+
+  it("updates without forwarding ownership, status or version and returns the warning", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/3", seal, "PATCH", {
+        ...fillBlankEditable,
+        answer_key: { blanks: ["Kurultay"] },
+        owner_unit_id: 999,
+        status: "archived",
+        version: 3,
+        id: 3,
+      }),
+      { params: Promise.resolve({ exerciseId: "3" }) },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      ...fillBlankEditable,
+      answer_key: { blanks: ["Kurultay"] },
+    });
+    expect(body).not.toHaveProperty("owner_unit_id");
+    expect(body).not.toHaveProperty("status");
+    expect(body).not.toHaveProperty("version");
+    expect(body).not.toHaveProperty("id");
+    expect(payload.data.version).toBe(4);
+    expect(payload.data.warning).toContain("Cevap anahtarı değişti");
+  });
+
+  it.each([
+    [
+      "a template with no placeholder",
+      {
+        content: { template: "Düz metin.", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    [
+      "more placeholders than answers",
+      {
+        content: { template: "{{0}} ve {{1}}", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    [
+      "more answers than placeholders",
+      {
+        content: { template: "{{0}}", choices: [] },
+        answer_key: { blanks: ["A", "B"] },
+      },
+    ],
+    [
+      "an answer outside a non-empty choice list",
+      {
+        content: { template: "{{0}}", choices: ["A", "B"] },
+        answer_key: { blanks: ["Z"] },
+      },
+    ],
+    ["an empty answer list", { answer_key: { blanks: [] } }],
+    [
+      "a blank template",
+      {
+        content: { template: "   ", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+  ])("rejects %s with 400 and zero backend calls", async (_label, change) => {
+    const seal = await issueSession();
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+    const created = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...fillBlankEditable, ...change, owner_unit_id: 12 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+    const updated = await update(
+      mutationRequest("/api/admin/exercises/3", seal, "PATCH", {
+        ...fillBlankEditable,
+        ...change,
+      }),
+      { params: Promise.resolve({ exerciseId: "3" }) },
+    );
+
+    expect(created.status).toBe(400);
+    expect(updated.status).toBe(400);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("blocks a fill blank mutation for edit_content=false before the backend", async () => {
+    const seal = await issueSession(contentReviewerFixture);
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+    const created = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...fillBlankEditable, owner_unit_id: 12 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(created.status).toBe(403);
+    expect(seen).not.toHaveBeenCalled();
+    expect(setCookieHeader(created)).toBeUndefined();
+  });
+
+  it("rejects a missing Origin on a fill blank create with zero backend calls", async () => {
+    const seal = await issueSession();
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen));
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...fillBlankEditable, owner_unit_id: 12 },
+        {},
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("reads a stored fill blank detail, including one with no choices", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json(validFillBlankDetailResponse),
+      ),
+    );
+    const withChoices = await detail(
+      resourceRequest("/api/admin/exercises/3", seal),
+      { params: Promise.resolve({ exerciseId: "3" }) },
+    );
+    const withChoicesBody = await withChoices.json();
+
+    expect(withChoices.status).toBe(200);
+    expect(withChoicesBody.data.content.choices).toEqual([
+      "Töre",
+      "Kurultay",
+      "Toy",
+      "Yuğ",
+    ]);
+    expect(withChoicesBody.data.answer_key).toEqual({ blanks: ["Töre"] });
+
+    mswServer.resetHandlers();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json({
+          ...validFillBlankDetailResponse,
+          data: {
+            ...validFillBlankDetailResponse.data,
+            content: { template: "Başkent {{0}} şehridir." },
+            answer_key: { blanks: ["Karabalgasun"] },
+          },
+        }),
+      ),
+    );
+    const freeAnswer = await detail(
+      resourceRequest("/api/admin/exercises/4", seal),
+      { params: Promise.resolve({ exerciseId: "4" }) },
+    );
+
+    expect(freeAnswer.status).toBe(200);
+    expect((await freeAnswer.json()).data.content.template).toBe(
+      "Başkent {{0}} şehridir.",
+    );
+  });
+
+  it("surfaces backend schema errors for a body it could not pre-empt", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.post(CREATE_URL, () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: "INVALID_EXERCISE_CONTENT",
+              message: "Soru içeriği geçersiz.",
+              details: {
+                schema_errors: [
+                  "Şablon en az bir boşluk içermeli: {{0}}",
+                  "Cevap listesi boş olamaz.",
+                ],
+              },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...fillBlankEditable, owner_unit_id: 12 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(payload.error.code).toBe("INVALID_EXERCISE_CONTENT");
+    expect(payload.error.details.schema_errors).toContain(
+      "Cevap listesi boş olamaz.",
     );
   });
 });

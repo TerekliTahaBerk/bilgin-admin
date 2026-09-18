@@ -121,7 +121,7 @@ test("renders a safe state for an unsupported or malformed create type", async (
 }) => {
   await signIn(page);
 
-  for (const query of ["?type=matching", "?type=banana", "?type=fill_blank"]) {
+  for (const query of ["?type=matching", "?type=banana", "?type=ordering"]) {
     await page.goto(`${LIST_PATH}/exercises/new${query}`);
     await expect(
       page.getByRole("heading", {
@@ -149,16 +149,16 @@ test("keeps an unsupported stored type readable but not editable", async ({
 }) => {
   await signIn(page);
   await page.goto(LIST_PATH);
-  // fill_blank stays listed and readable, with no edit link on its own row.
-  const fillBlankRow = page
+  // matching stays listed and readable, with no edit link on its own row.
+  const matchingRow = page
     .locator("main ul li")
-    .filter({ hasText: "Yazısız hukuk kurallarına {{0}} denir." });
-  await expect(fillBlankRow).toHaveCount(1);
-  await expect(fillBlankRow.getByRole("link", { name: "Düzenle" })).toHaveCount(
+    .filter({ hasText: "Kavramı karşılığıyla birleştir." });
+  await expect(matchingRow).toHaveCount(1);
+  await expect(matchingRow.getByRole("link", { name: "Düzenle" })).toHaveCount(
     0,
   );
 
-  await page.goto(`${LIST_PATH}/exercises/103`);
+  await page.goto(`${LIST_PATH}/exercises/104`);
   await expect(
     page.getByRole("heading", {
       name: "Bu soru tipi henüz bu editörde desteklenmiyor.",

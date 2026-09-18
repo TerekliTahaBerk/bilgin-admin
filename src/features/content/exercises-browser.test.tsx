@@ -537,20 +537,29 @@ describe("ExercisesBrowser editor actions", () => {
     ).toBe(
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new?type=true_false`,
     );
-    // Step 03 types have no create action yet.
-    expect(screen.queryByRole("link", { name: /boşluk doldurma/i })).toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "Yeni boşluk doldurma" })
+        .getAttribute("href"),
+    ).toBe(
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new?type=fill_blank`,
+    );
+    // The seven remaining types have no create action.
+    expect(screen.queryByRole("link", { name: /eşleştirme/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /görsel/i })).toBeNull();
   });
 
   it("links Düzenle for the editable types only", async () => {
     renderBrowser({}, true);
     await screen.findByText("(önizleme yok)");
 
-    // Fixture rows: multiple_choice(1), true_false(2), fill_blank, matching,
-    // image_hotspot. Only the first two are editable in Step 02.
+    // Fixture rows: multiple_choice(1), true_false(2), fill_blank(3),
+    // matching(4), image_hotspot(5). Only the first three are editable.
     const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
     expect(editLinks.map((link) => link.getAttribute("href")).sort()).toEqual([
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/2`,
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/3`,
     ]);
   });
 
@@ -562,6 +571,9 @@ describe("ExercisesBrowser editor actions", () => {
     ).toBeNull();
     expect(
       screen.queryByRole("link", { name: "Yeni doğru / yanlış" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Yeni boşluk doldurma" }),
     ).toBeNull();
     expect(screen.queryByRole("link", { name: "Düzenle" })).toBeNull();
   });

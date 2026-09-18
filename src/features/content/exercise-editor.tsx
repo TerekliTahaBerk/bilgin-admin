@@ -52,6 +52,10 @@ import {
 } from "@/features/content/editor-form";
 import { FieldError } from "@/features/content/editor-field-error";
 import {
+  FillBlankFields,
+  FillBlankPreview,
+} from "@/features/content/fill-blank-section";
+import {
   MultipleChoiceFields,
   MultipleChoicePreview,
 } from "@/features/content/multiple-choice-section";
@@ -99,6 +103,14 @@ const SERVER_FIELD_PATHS: Record<
     applicable_scopes: "scopes",
     content: "trueFalse.statement",
     answer_key: "trueFalse.answerValue",
+  },
+  fill_blank: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "fillBlank.template",
+    answer_key: "fillBlank.blanks",
   },
 };
 
@@ -150,7 +162,7 @@ export function EditorAccessDenied() {
 export function EditorUnsupportedType() {
   return (
     <SafeState
-      message="Bu soru tipi çoktan seçmeli ve doğru / yanlış editörleriyle değiştirilemez."
+      message="Bu soru tipi çoktan seçmeli, doğru / yanlış ve boşluk doldurma editörleriyle değiştirilemez."
       title="Bu soru tipi henüz bu editörde desteklenmiyor."
     />
   );
@@ -587,7 +599,8 @@ export function ExerciseEditor({
        * without an explicit method submits natively with GET, so a submit that
        * lands before React hydrates (or with JavaScript disabled or broken)
        * would serialise every field — statement, stem, option texts, the
-       * answer, explanation — into the URL query string, and from there into
+       * template, choices, the answer, explanation — into the URL query
+       * string, and from there into
        * history, referrers and access logs. POST keeps the answer key in the
        * request body; the page route does not handle POST, so the native
        * submit simply fails instead of leaking.
@@ -695,8 +708,10 @@ export function ExerciseEditor({
 
             {activeType === "multiple_choice" ? (
               <MultipleChoiceFields form={form} />
-            ) : (
+            ) : activeType === "true_false" ? (
               <TrueFalseFields form={form} />
+            ) : (
+              <FillBlankFields form={form} />
             )}
 
             <div>
@@ -759,8 +774,10 @@ export function ExerciseEditor({
 
         {activeType === "multiple_choice" ? (
           <MultipleChoicePreview values={values} />
-        ) : (
+        ) : activeType === "true_false" ? (
           <TrueFalsePreview values={values} />
+        ) : (
+          <FillBlankPreview values={values} />
         )}
       </form>
     </div>

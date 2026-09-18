@@ -185,14 +185,17 @@ test("offers only the supported editor actions", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Yeni doğru / yanlış" }),
   ).toBeVisible();
-  // Multiple choice and true/false are editable; the other three rows
-  // (fill_blank, matching, image_hotspot) are read-only until later steps.
-  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(2);
+  await expect(
+    page.getByRole("link", { name: "Yeni boşluk doldurma" }),
+  ).toBeVisible();
+  // The three M2 editor types are editable; matching and image_hotspot rows
+  // stay read-only.
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(3);
 
   for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-  await expect(page.locator("main ul li a")).toHaveCount(2);
+  await expect(page.locator("main ul li a")).toHaveCount(3);
   await expect(page.locator("main ul li button")).toHaveCount(0);
 });
 

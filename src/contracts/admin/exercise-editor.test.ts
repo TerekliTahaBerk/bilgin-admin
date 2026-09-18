@@ -5,12 +5,14 @@ import {
   createExerciseRequestSchema,
   createExerciseResponseSchema,
   exerciseDetailResponseSchema,
+  fillBlankContentSchema,
   updateExerciseRequestSchema,
   updateExerciseResponseSchema,
 } from "@/contracts/admin/exercise-editor";
 import {
   validCreateExerciseResponse,
   validExerciseDetailResponse,
+  validFillBlankDetailResponse,
   validTrueFalseDetailResponse,
   validTopicsResponse,
   validUpdateExerciseResponse,
@@ -79,9 +81,8 @@ describe("exercise editor backend contracts", () => {
     ).toBe(false);
   });
 
-  it("keeps the eight unsupported detail types readable for a safe UI state", () => {
+  it("keeps the seven unsupported detail types readable for a safe UI state", () => {
     for (const type of [
-      "fill_blank",
       "matching",
       "ordering",
       "word_order",
@@ -126,7 +127,7 @@ describe("exercise editor backend contracts", () => {
   });
 
   it("rejects a mutation body for an unsupported type before any backend call", () => {
-    for (const type of ["fill_blank", "matching", "banana", ""]) {
+    for (const type of ["matching", "ordering", "banana", ""]) {
       expect(
         createExerciseRequestSchema.safeParse({
           ...editable,
@@ -286,5 +287,222 @@ describe("true/false contracts", () => {
         content: { stem: "Soru?", options: [{ id: "a", text: "A" }] },
       }).success,
     ).toBe(false);
+  });
+});
+
+const fillBlankEditable = {
+  type: "fill_blank",
+  topic_id: 1,
+  difficulty: 3,
+  content: {
+    template: "Türklerde yazısız hukuk kurallarına {{0}} denir.",
+    choices: ["Töre", "Kurultay"],
+  },
+  answer_key: { blanks: ["Töre"] },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+} as const;
+
+function fillBlankBody(change: Record<string, unknown>) {
+  return { ...fillBlankEditable, ...change, owner_unit_id: 12 };
+}
+
+describe("fill blank contracts", () => {
+  it("reads a stored question with its template, choices and answers intact", () => {
+    const parsed = exerciseDetailResponseSchema.parse(
+      validFillBlankDetailResponse,
+    );
+    expect(parsed.data.content).toEqual({
+      template: "Türklerde yazısız hukuk kurallarına {{0}} denir.",
+      choices: ["Töre", "Kurultay", "Toy", "Yuğ"],
+    });
+    expect(parsed.data.answer_key).toEqual({ blanks: ["Töre"] });
+  });
+
+  it("accepts a detail with no choices and normalises them to an empty list", () => {
+    // The backend validator reads choices ?? [], so this shape is valid there
+    // and must stay readable. The detail keeps the backend's raw record; the
+    // content schema is what normalises it for the editor.
+    const content = { template: "Başkent {{0}} şehridir." };
+    expect(
+      exerciseDetailResponseSchema.safeParse({
+        ...validFillBlankDetailResponse,
+        data: { ...validFillBlankDetailResponse.data, content },
+      }).success,
+    ).toBe(true);
+    expect(fillBlankContentSchema.parse(content)).toEqual({
+      template: "Başkent {{0}} şehridir.",
+      choices: [],
+    });
+  });
+
+  it("keeps a stored detail readable even when the editor would refuse to save it", () => {
+    // A detail read must not become a protocol error over content the editor
+    // can surface and let a human fix.
+    for (const data of [
+      { content: { template: "Boşluksuz metin.", choices: [] } },
+      { answer_key: { blanks: [] } },
+      { answer_key: { blanks: ["A", "B"] } },
+      { answer_key: { blanks: [""] } },
+    ]) {
+      expect(
+        exerciseDetailResponseSchema.safeParse({
+          ...validFillBlankDetailResponse,
+          data: { ...validFillBlankDetailResponse.data, ...data },
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it.each([
+    ["a missing template", { content: { choices: [] } }],
+    ["a non-string template", { content: { template: 7, choices: [] } }],
+    ["non-string choices", { content: { template: "{{0}}", choices: [7] } }],
+    ["missing blanks", { answer_key: {} }],
+    ["non-string blanks", { answer_key: { blanks: [7] } }],
+  ])("rejects the unreadable shape: %s", (_label, data) => {
+    expect(
+      exerciseDetailResponseSchema.safeParse({
+        ...validFillBlankDetailResponse,
+        data: { ...validFillBlankDetailResponse.data, ...data },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a single-blank and a multi-blank mutation body", () => {
+    expect(
+      createExerciseRequestSchema.safeParse(fillBlankBody({})).success,
+    ).toBe(true);
+    expect(
+      createExerciseRequestSchema.safeParse(
+        fillBlankBody({
+          content: {
+            template: "{{0}} ve {{1}} birlikte kullanılır.",
+            choices: ["Töre", "Kut"],
+          },
+          answer_key: { blanks: ["Töre", "Kut"] },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("accepts a free-answer body whose choices are empty", () => {
+    const parsed = createExerciseRequestSchema.parse(
+      fillBlankBody({
+        content: { template: "Başkent {{0}} şehridir.", choices: [] },
+        answer_key: { blanks: ["Karabalgasun"] },
+      }),
+    );
+    expect(parsed.content).toEqual({
+      template: "Başkent {{0}} şehridir.",
+      choices: [],
+    });
+  });
+
+  it("mirrors the backend's occurrence counting for repeated and odd tokens", () => {
+    expect(
+      createExerciseRequestSchema.safeParse(
+        fillBlankBody({
+          content: { template: "{{0}} ve yine {{0}}", choices: [] },
+          answer_key: { blanks: ["A", "B"] },
+        }),
+      ).success,
+    ).toBe(true);
+    expect(
+      createExerciseRequestSchema.safeParse(
+        fillBlankBody({
+          content: { template: "{{4}} sonra {{1}}", choices: [] },
+          answer_key: { blanks: ["A", "B"] },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      "a blank template",
+      {
+        content: { template: "   ", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    [
+      "zero placeholders",
+      {
+        content: { template: "Düz metin.", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    [
+      "a malformed token only",
+      {
+        content: { template: "Düz {0} metin.", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    ["an empty answer list", { answer_key: { blanks: [] } }],
+    [
+      "too few answers",
+      {
+        content: { template: "{{0}} ve {{1}}", choices: [] },
+        answer_key: { blanks: ["A"] },
+      },
+    ],
+    [
+      "too many answers",
+      {
+        content: { template: "{{0}}", choices: [] },
+        answer_key: { blanks: ["A", "B"] },
+      },
+    ],
+    [
+      "an answer outside a non-empty choice list",
+      {
+        content: { template: "{{0}}", choices: ["A", "B"] },
+        answer_key: { blanks: ["Z"] },
+      },
+    ],
+    [
+      "an answer that only differs by case",
+      {
+        content: { template: "{{0}}", choices: ["Töre"] },
+        answer_key: { blanks: ["töre"] },
+      },
+    ],
+  ])("rejects %s before any backend call", (_label, change) => {
+    expect(
+      createExerciseRequestSchema.safeParse(fillBlankBody(change)).success,
+    ).toBe(false);
+    const update = { ...fillBlankEditable, ...change };
+    expect(updateExerciseRequestSchema.safeParse(update).success).toBe(false);
+  });
+
+  it("strips ownership and lifecycle fields from fill blank bodies too", () => {
+    const create = createExerciseRequestSchema.parse({
+      ...fillBlankEditable,
+      owner_unit_id: 12,
+      owner_course_id: 5,
+      id: 77,
+      status: "published",
+      version: 99,
+      stats: {},
+    });
+    const update = updateExerciseRequestSchema.parse({
+      ...fillBlankEditable,
+      owner_unit_id: 999,
+      status: "archived",
+      version: 3,
+      id: 77,
+    });
+
+    expect(create).not.toHaveProperty("owner_course_id");
+    expect(create).not.toHaveProperty("id");
+    expect(create).not.toHaveProperty("status");
+    expect(create).not.toHaveProperty("version");
+    expect(create).not.toHaveProperty("stats");
+    expect(update).not.toHaveProperty("owner_unit_id");
+    expect(update).not.toHaveProperty("status");
+    expect(update).not.toHaveProperty("version");
+    expect(update).not.toHaveProperty("id");
   });
 });

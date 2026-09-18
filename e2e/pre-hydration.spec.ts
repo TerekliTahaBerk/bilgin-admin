@@ -85,11 +85,15 @@ test.describe("native exercise editor submit", () => {
     "scopes",
     "statement",
     "answerValue",
+    "template",
+    "choices",
+    "blanks",
   ];
   const STEM = "Pre hydration sizinti sorusu";
   const OPTION_TEXT = "Pre hydration sik metni";
   const EXPLANATION = "Pre hydration aciklamasi";
   const STATEMENT = "Pre hydration sizinti ifadesi";
+  const FILL_BLANK_ANSWER = "Pre hydration sizinti cevabi";
 
   async function signIn(page: Page) {
     await page.goto("/login");
@@ -123,6 +127,7 @@ test.describe("native exercise editor submit", () => {
       OPTION_TEXT,
       EXPLANATION,
       STATEMENT,
+      FILL_BLANK_ANSWER,
     ]) {
       expect(url).not.toContain(secret);
       expect(url).not.toContain(encodeURIComponent(secret));
@@ -251,5 +256,46 @@ test.describe("native exercise editor submit", () => {
 
     await page.waitForLoadState("load").catch(() => undefined);
     expectNoLeak(page.url(), { type: "true_false" });
+  });
+
+  test("native submit on the fill blank route keeps only the safe type query", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`${NEW_PATH}?type=fill_blank`);
+
+    await page.getByLabel("Konu").selectOption("1");
+    await page.getByLabel("Cümle şablonu").fill(`${STEM} {{0}} ${OPTION_TEXT}`);
+    await page.getByLabel("Boşluk 1 · {{0}}").fill(FILL_BLANK_ANSWER);
+    await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+    const form = page
+      .locator("form")
+      .filter({ has: page.locator("#template") });
+    await expect(form).toHaveAttribute("method", "post");
+
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (candidate) =>
+          candidate.isNavigationRequest() &&
+          candidate.url().includes("/exercises"),
+      ),
+      page.evaluate(() => {
+        const target = document.querySelector("#template")?.closest("form");
+        if (target === null || target === undefined) {
+          throw new Error("editor form not found");
+        }
+        HTMLFormElement.prototype.submit.call(target);
+      }),
+    ]);
+
+    expect(request.method()).not.toBe("GET");
+    expect(request.method()).toBe("POST");
+    // type=fill_blank is routing metadata and may stay; the template, the
+    // choices and the answers may not.
+    expectNoLeak(request.url(), { type: "fill_blank" });
+
+    await page.waitForLoadState("load").catch(() => undefined);
+    expectNoLeak(page.url(), { type: "fill_blank" });
   });
 });

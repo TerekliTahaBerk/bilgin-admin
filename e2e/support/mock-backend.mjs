@@ -305,21 +305,16 @@ const EXERCISE_DETAILS = {
       needs_review: true,
     },
   },
-  // Read-only on purpose: fill_blank is Step 03, so the detail must stay
-  // readable while the editor refuses to mutate it.
   103: {
     id: 103,
     type: "fill_blank",
     topic_id: 2,
     difficulty: 3,
     content: {
-      segments: [
-        { kind: "text", value: "Yazısız hukuk kurallarına " },
-        { kind: "blank", index: 0 },
-        { kind: "text", value: " denir." },
-      ],
+      template: "Yazısız hukuk kurallarına {{0}} denir.",
+      choices: ["Töre", "Kurultay", "Toy", "Yuğ"],
     },
-    answer_key: { blanks: [["töre"]] },
+    answer_key: { blanks: ["Töre"] },
     explanation: null,
     applicable_scopes: ["tyt", "ayt"],
     status: "review",
@@ -331,17 +326,45 @@ const EXERCISE_DETAILS = {
       needs_review: false,
     },
   },
+  // Read-only on purpose: matching is not an M2 editor type, so its detail
+  // must stay readable while the editor refuses to mutate it.
+  104: {
+    id: 104,
+    type: "matching",
+    topic_id: 2,
+    difficulty: 5,
+    content: {
+      pairs: [
+        { left: "Töre", right: "Yazısız hukuk" },
+        { left: "Kurultay", right: "Devlet meclisi" },
+      ],
+    },
+    answer_key: { pairs: [["Töre", "Yazısız hukuk"]] },
+    explanation: null,
+    applicable_scopes: ["ayt"],
+    status: "archived",
+    version: 1,
+    stats: {
+      attempts: 22,
+      correct_rate: 9,
+      avg_seconds: 51,
+      needs_review: true,
+    },
+  },
 };
 
-/** Both editable types keep a readable list preview. */
+/** Every editable type keeps a readable list preview. */
 function previewOf(detail) {
-  return detail.type === "true_false"
-    ? detail.content.statement
-    : detail.content.stem;
+  if (detail.type === "true_false") return detail.content.statement;
+  if (detail.type === "fill_blank") return detail.content.template;
+  return detail.content.stem;
 }
 
 /** The answer key shape differs per type; `false` is a real answer. */
 function answerKeyChanged(current, next) {
+  if ("blanks" in next || "blanks" in current) {
+    return JSON.stringify(current.blanks) !== JSON.stringify(next.blanks);
+  }
   if ("value" in next || "value" in current) {
     return current.value !== next.value;
   }

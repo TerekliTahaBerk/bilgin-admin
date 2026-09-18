@@ -370,12 +370,12 @@ describe("multiple choice edit editor", () => {
   });
 
   it("renders a safe unsupported-type state without a mutation form", async () => {
-    // fill_blank is Step 03; it stays readable but not editable.
+    // matching is not an M2 editor type; it stays readable but not editable.
     getExerciseDetail.mockResolvedValue({
       ...detail,
-      type: "fill_blank",
-      content: { segments: [{ kind: "text", value: "x" }] },
-      answer_key: { blanks: ["x"] },
+      type: "matching",
+      content: { pairs: [{ left: "a", right: "b" }] },
+      answer_key: { pairs: [["a", "b"]] },
     });
     renderEditor(101);
     expect(

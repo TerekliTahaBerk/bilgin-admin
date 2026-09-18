@@ -16,6 +16,13 @@ import {
   strictMultipleChoiceBranchSchema,
 } from "@/features/content/multiple-choice-form";
 import {
+  createFillBlankBranch,
+  fillBlankBranchFromDetail,
+  fillBlankBranchSchema,
+  serializeFillBlankBranch,
+  strictFillBlankBranchSchema,
+} from "@/features/content/fill-blank-form";
+import {
   createTrueFalseBranch,
   serializeTrueFalseBranch,
   strictTrueFalseBranchSchema,
@@ -26,6 +33,7 @@ import {
 export const editorTypeLabels: Record<SupportedEditorType, string> = {
   multiple_choice: "Çoktan seçmeli",
   true_false: "Doğru / Yanlış",
+  fill_blank: "Boşluk doldurma",
 };
 
 export const editorTypeHeadings: Record<
@@ -39,6 +47,10 @@ export const editorTypeHeadings: Record<
   true_false: {
     create: "Yeni doğru / yanlış sorusu",
     edit: "Doğru / yanlış sorusunu düzenle",
+  },
+  fill_blank: {
+    create: "Yeni boşluk doldurma sorusu",
+    edit: "Boşluk doldurma sorusunu düzenle",
   },
 };
 
@@ -64,11 +76,13 @@ export const commonEditorFieldsSchema = z.object({
 const branchKeyByType = {
   multiple_choice: "multipleChoice",
   true_false: "trueFalse",
+  fill_blank: "fillBlank",
 } as const;
 
 const strictBranchByType = {
   multiple_choice: strictMultipleChoiceBranchSchema,
   true_false: strictTrueFalseBranchSchema,
+  fill_blank: strictFillBlankBranchSchema,
 } as const;
 
 /**
@@ -78,9 +92,10 @@ const strictBranchByType = {
  */
 export const editorFormSchema = commonEditorFieldsSchema
   .extend({
-    type: z.enum(["multiple_choice", "true_false"]),
+    type: z.enum(["multiple_choice", "true_false", "fill_blank"]),
     multipleChoice: multipleChoiceBranchSchema,
     trueFalse: trueFalseBranchSchema,
+    fillBlank: fillBlankBranchSchema,
   })
   .superRefine((values, context) => {
     const key = branchKeyByType[values.type];
@@ -121,6 +136,7 @@ export function createEditorDefaults(
     // a previous question's statement or answer into the next one.
     multipleChoice: createMultipleChoiceBranch(),
     trueFalse: createTrueFalseBranch(),
+    fillBlank: createFillBlankBranch(),
   };
 }
 
@@ -159,8 +175,13 @@ export function formValuesFromDetail(
     return branch === null ? null : { ...common, multipleChoice: branch };
   }
 
-  const branch = trueFalseBranchFromDetail(detail);
-  return branch === null ? null : { ...common, trueFalse: branch };
+  if (detail.type === "true_false") {
+    const branch = trueFalseBranchFromDetail(detail);
+    return branch === null ? null : { ...common, trueFalse: branch };
+  }
+
+  const branch = fillBlankBranchFromDetail(detail);
+  return branch === null ? null : { ...common, fillBlank: branch };
 }
 
 function editablePayload(values: EditorFormValues) {
@@ -176,9 +197,18 @@ function editablePayload(values: EditorFormValues) {
     applicable_scopes: values.scopes,
   };
 
-  return values.type === "multiple_choice"
-    ? { ...serializeMultipleChoiceBranch(values.multipleChoice), ...common }
-    : { ...serializeTrueFalseBranch(values.trueFalse), ...common };
+  if (values.type === "multiple_choice") {
+    return {
+      ...serializeMultipleChoiceBranch(values.multipleChoice),
+      ...common,
+    };
+  }
+
+  if (values.type === "true_false") {
+    return { ...serializeTrueFalseBranch(values.trueFalse), ...common };
+  }
+
+  return { ...serializeFillBlankBranch(values.fillBlank), ...common };
 }
 
 export function serializeCreateExercise(
