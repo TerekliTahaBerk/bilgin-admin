@@ -9,6 +9,16 @@ import {
   type UnitExercisesData,
 } from "@/contracts/admin/content";
 import {
+  courseTopicsResponseSchema,
+  createExerciseResponseSchema,
+  exerciseDetailResponseSchema,
+  updateExerciseResponseSchema,
+  type CourseTopicsData,
+  type CreateExerciseRequest,
+  type ExerciseDetail,
+  type UpdateExerciseRequest,
+} from "@/contracts/admin/exercise-editor";
+import {
   buildExerciseQuery,
   type ExerciseServerFilters,
 } from "@/features/content/exercise-filters";
@@ -34,6 +44,16 @@ const resourceErrorSchema = z.object({
 const coursesPayloadSchema = coursesResponseSchema.pick({ data: true });
 const unitsPayloadSchema = unitsResponseSchema.pick({ data: true });
 const exercisesPayloadSchema = unitExercisesResponseSchema.pick({ data: true });
+const topicsPayloadSchema = courseTopicsResponseSchema.pick({ data: true });
+const exerciseDetailPayloadSchema = exerciseDetailResponseSchema.pick({
+  data: true,
+});
+const createExercisePayloadSchema = createExerciseResponseSchema.pick({
+  data: true,
+});
+const updateExercisePayloadSchema = updateExerciseResponseSchema.pick({
+  data: true,
+});
 
 const networkError: ApiError = {
   kind: "network",
@@ -108,6 +128,39 @@ async function requestResource<Value>(
   return parsed.data;
 }
 
+async function requestMutation<Value>(
+  path: string,
+  method: "POST" | "PATCH",
+  input: unknown,
+  parse: (body: unknown) => ParseResult<Value>,
+): Promise<Value> {
+  let response: Response;
+
+  try {
+    response = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    throw networkError;
+  }
+
+  const body = await readJson(response);
+
+  if (!response.ok) {
+    const parsed = resourceErrorSchema.safeParse(body);
+    throw parsed.success ? parsed.data.error : contractError(response.status);
+  }
+
+  const parsed = parse(body);
+  if (!parsed.success) throw contractError(response.status);
+
+  return parsed.data;
+}
+
 export function getCourses(
   options: { signal?: AbortSignal } = {},
 ): Promise<Course[]> {
@@ -166,5 +219,63 @@ export function getUnitExercises(
         : { success: false };
     },
     options,
+  );
+}
+
+export function getCourseTopics(
+  courseId: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<CourseTopicsData> {
+  return requestResource(
+    `${COURSES_PATH}/${requireResourceId(courseId)}/topics`,
+    (body) => {
+      const parsed = topicsPayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+    options,
+  );
+}
+
+export function getExerciseDetail(
+  exerciseId: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<ExerciseDetail> {
+  return requestResource(
+    `/api/admin/exercises/${requireResourceId(exerciseId)}`,
+    (body) => {
+      const parsed = exerciseDetailPayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+    options,
+  );
+}
+
+export function createExercise(input: CreateExerciseRequest) {
+  return requestMutation("/api/admin/exercises", "POST", input, (body) => {
+    const parsed = createExercisePayloadSchema.safeParse(body);
+    return parsed.success
+      ? { success: true, data: parsed.data.data }
+      : { success: false };
+  });
+}
+
+export function updateExercise(
+  exerciseId: number,
+  input: UpdateExerciseRequest,
+) {
+  return requestMutation(
+    `/api/admin/exercises/${requireResourceId(exerciseId)}`,
+    "PATCH",
+    input,
+    (body) => {
+      const parsed = updateExercisePayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
   );
 }

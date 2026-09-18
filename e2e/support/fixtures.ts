@@ -12,6 +12,7 @@ export const E2E_SESSION_COOKIE = "bilgin_admin_session";
 // Test-only credentials served by e2e/support/mock-backend.mjs.
 export const E2E_EMAIL = "editor@bilgin.test";
 export const E2E_PASSWORD = "test-password";
+export const E2E_REVIEWER_EMAIL = "reviewer@bilgin.test";
 export const E2E_WRONG_PASSWORD = "wrong-password";
 
 export const E2E_ADMIN_NAME = "Taha Berk";

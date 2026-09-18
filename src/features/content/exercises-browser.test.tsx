@@ -58,7 +58,7 @@ const UNIT_ID = units[0]!.id;
 const onFiltersChange = vi.fn();
 const onClearFilters = vi.fn();
 
-function renderBrowser(filters: ExerciseFilterValues = {}) {
+function renderBrowser(filters: ExerciseFilterValues = {}, canEdit = false) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -66,6 +66,7 @@ function renderBrowser(filters: ExerciseFilterValues = {}) {
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <ExercisesBrowser
+        canEdit={canEdit}
         courseId={COURSE_ID}
         filters={filters}
         onClearFilters={onClearFilters}
@@ -81,6 +82,7 @@ function renderBrowser(filters: ExerciseFilterValues = {}) {
       utils.rerender(
         <QueryClientProvider client={queryClient}>
           <ExercisesBrowser
+            canEdit={canEdit}
             courseId={COURSE_ID}
             filters={next}
             onClearFilters={onClearFilters}
@@ -515,6 +517,32 @@ describe("ExercisesBrowser hierarchy and errors", () => {
     });
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("ExercisesBrowser editor actions", () => {
+  it("shows create and only multiple-choice edit links with edit_content", async () => {
+    renderBrowser({}, true);
+    await screen.findByText("(önizleme yok)");
+    expect(
+      screen
+        .getByRole("link", { name: "Yeni çoktan seçmeli soru" })
+        .getAttribute("href"),
+    ).toBe(`/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new`);
+    const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
+    expect(editLinks).toHaveLength(1);
+    expect(editLinks[0]?.getAttribute("href")).toBe(
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
+    );
+  });
+
+  it("shows no create or edit actions without edit_content", async () => {
+    renderBrowser();
+    await screen.findByText("(önizleme yok)");
+    expect(
+      screen.queryByRole("link", { name: "Yeni çoktan seçmeli soru" }),
+    ).toBeNull();
+    expect(screen.queryByRole("link", { name: "Düzenle" })).toBeNull();
   });
 });
 
