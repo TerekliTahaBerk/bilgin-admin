@@ -17,6 +17,8 @@ import {
   validCreateExerciseResponse,
   validExerciseDetailResponse,
   validFillBlankDetailResponse,
+  validFlashcardDetailResponse,
+  validNumericInputDetailResponse,
   validTopicsResponse,
   validTrueFalseDetailResponse,
   validUpdateExerciseResponse,
@@ -950,4 +952,362 @@ describe("fill blank mutations through the real BFF chain", () => {
       "Cevap listesi boş olamaz.",
     );
   });
+});
+
+const numericEditable = {
+  type: "numeric_input",
+  topic_id: 1,
+  difficulty: 3,
+  content: { stem: "Sıfırıncı yıl hangisidir?" },
+  answer_key: { value: 0, tolerance: 0 },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+const flashcardEditable = {
+  type: "flashcard",
+  topic_id: 1,
+  difficulty: 2,
+  content: { front: "Kut", back: "Yönetme yetkisi inancı." },
+  answer_key: { self_assessed: true },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+describe("numeric input mutations through the real BFF chain", () => {
+  it("creates with a JSON zero answer and strips everything else", async () => {
+    const seal = await issueSession();
+    let raw = "";
+    let body: unknown;
+    let authorization: string | null = null;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        raw = await request.text();
+        body = JSON.parse(raw);
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...numericEditable,
+          owner_unit_id: 12,
+          id: 77,
+          status: "published",
+          version: 9,
+          stats: { attempts: 3 },
+          owner_course_id: 4,
+        },
+        { origin: APP_ORIGIN, authorization: "Bearer attacker" },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...numericEditable, owner_unit_id: 12 });
+    // The wire format itself, not just the parsed object.
+    expect(raw).toContain('"value":0');
+    expect(raw).toContain('"tolerance":0');
+    expect(raw).not.toContain('"0"');
+    expect(authorization).toBe(`Bearer ${contentEditorFixture.token}`);
+    for (const stripped of [
+      "id",
+      "status",
+      "version",
+      "stats",
+      "owner_course_id",
+    ]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it("forwards negative, decimal and suffixed numeric questions unchanged", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...numericEditable,
+          content: { stem: "Kaç derece?", suffix: "derece" },
+          answer_key: { value: -2.5, tolerance: 0.01 },
+          owner_unit_id: 12,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      content: { stem: "Kaç derece?", suffix: "derece" },
+      answer_key: { value: -2.5, tolerance: 0.01 },
+    });
+  });
+
+  it("updates without forwarding ownership, status or version", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/4", seal, "PATCH", {
+        ...numericEditable,
+        answer_key: { value: 0.33, tolerance: 0.01 },
+        owner_unit_id: 999,
+        status: "archived",
+        version: 3,
+        id: 4,
+      }),
+      { params: Promise.resolve({ exerciseId: "4" }) },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      ...numericEditable,
+      answer_key: { value: 0.33, tolerance: 0.01 },
+    });
+    for (const stripped of ["owner_unit_id", "status", "version", "id"]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+    expect(payload.data.version).toBe(4);
+  });
+
+  it.each([
+    ['a string value "0"', { value: "0", tolerance: 0 }],
+    ['a string value "375"', { value: "375", tolerance: 0 }],
+    ['a string tolerance "0"', { value: 375, tolerance: "0" }],
+    ["a negative tolerance", { value: 375, tolerance: -1 }],
+    ["a null value", { value: null, tolerance: 0 }],
+    ["a missing value", { tolerance: 0 }],
+    ["a missing tolerance", { value: 375 }],
+  ])(
+    "rejects %s with 400 and zero backend calls",
+    async (_label, answerKey) => {
+      const seal = await issueSession();
+      const seen = vi.fn();
+      mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+      const created = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          seal,
+          "POST",
+          { ...numericEditable, answer_key: answerKey, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+      const updated = await update(
+        mutationRequest("/api/admin/exercises/4", seal, "PATCH", {
+          ...numericEditable,
+          answer_key: answerKey,
+        }),
+        { params: Promise.resolve({ exerciseId: "4" }) },
+      );
+
+      expect(created.status).toBe(400);
+      expect(updated.status).toBe(400);
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reads a stored numeric detail, including a zero answer", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json(validNumericInputDetailResponse),
+      ),
+    );
+
+    const response = await detail(
+      resourceRequest("/api/admin/exercises/4", seal),
+      { params: Promise.resolve({ exerciseId: "4" }) },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data.answer_key).toEqual({ value: 0, tolerance: 0 });
+    expect(payload.data.content.suffix).toBe("yılı");
+  });
+});
+
+describe("flashcard mutations through the real BFF chain", () => {
+  it("creates with the canonical answer key, ignoring what the browser sent", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...flashcardEditable,
+          // A crafted answer key must not reach the backend.
+          answer_key: { self_assessed: false, admin: true, other: "x" },
+          owner_unit_id: 12,
+          id: 9,
+          status: "published",
+          version: 4,
+          stats: {},
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...flashcardEditable, owner_unit_id: 12 });
+    expect(body).toMatchObject({ answer_key: { self_assessed: true } });
+    for (const stripped of ["id", "status", "version", "stats"]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it("updates without forwarding ownership, status or version", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/5", seal, "PATCH", {
+        ...flashcardEditable,
+        content: { front: "Kut (kavram)", back: "Tanım" },
+        owner_unit_id: 999,
+        status: "archived",
+        version: 7,
+        id: 5,
+      }),
+      { params: Promise.resolve({ exerciseId: "5" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      ...flashcardEditable,
+      content: { front: "Kut (kavram)", back: "Tanım" },
+    });
+    for (const stripped of ["owner_unit_id", "status", "version", "id"]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it("reads a stored card whose answer key has no self_assessed", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json({
+          ...validFlashcardDetailResponse,
+          data: { ...validFlashcardDetailResponse.data, answer_key: {} },
+        }),
+      ),
+    );
+
+    const response = await detail(
+      resourceRequest("/api/admin/exercises/5", seal),
+      { params: Promise.resolve({ exerciseId: "5" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.content.front).toBe("Kut");
+  });
+});
+
+describe("the five unsupported types stay unmutable", () => {
+  it.each([
+    ["matching"],
+    ["ordering"],
+    ["word_order"],
+    ["image_hotspot"],
+    ["diagram_label"],
+  ])("rejects a %s mutation with 400 and zero backend calls", async (type) => {
+    const seal = await issueSession();
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+    const created = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...flashcardEditable, type, owner_unit_id: 12 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+    const updated = await update(
+      mutationRequest("/api/admin/exercises/5", seal, "PATCH", {
+        ...flashcardEditable,
+        type,
+      }),
+      { params: Promise.resolve({ exerciseId: "5" }) },
+    );
+
+    expect(created.status).toBe(400);
+    expect(updated.status).toBe(400);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["numeric_input", numericEditable],
+    ["flashcard", flashcardEditable],
+  ])(
+    "keeps the %s guards: wrong Origin and edit_content=false both stop before the backend",
+    async (_label, editable) => {
+      const seen = vi.fn();
+
+      const editorSeal = await issueSession();
+      mswServer.use(http.post(CREATE_URL, seen));
+      const wrongOrigin = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          editorSeal,
+          "POST",
+          { ...editable, owner_unit_id: 12 },
+          { origin: "https://evil.test" },
+        ),
+      );
+      expect(wrongOrigin.status).toBe(403);
+
+      const reviewerSeal = await issueSession(contentReviewerFixture);
+      const forbidden = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          reviewerSeal,
+          "POST",
+          { ...editable, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+      expect(forbidden.status).toBe(403);
+      expect(setCookieHeader(forbidden)).toBeUndefined();
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
 });

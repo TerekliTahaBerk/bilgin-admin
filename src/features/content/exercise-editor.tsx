@@ -5,8 +5,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useForm, useWatch, type FieldPath } from "react-hook-form";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  useForm,
+  useWatch,
+  type FieldPath,
+  type UseFormReturn,
+} from "react-hook-form";
 import { z } from "zod";
 
 import type {
@@ -55,6 +67,14 @@ import {
   FillBlankFields,
   FillBlankPreview,
 } from "@/features/content/fill-blank-section";
+import {
+  FlashcardFields,
+  FlashcardPreview,
+} from "@/features/content/flashcard-section";
+import {
+  NumericInputFields,
+  NumericInputPreview,
+} from "@/features/content/numeric-input-section";
 import {
   MultipleChoiceFields,
   MultipleChoicePreview,
@@ -112,6 +132,64 @@ const SERVER_FIELD_PATHS: Record<
     content: "fillBlank.template",
     answer_key: "fillBlank.blanks",
   },
+  numeric_input: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "numericInput.stem",
+    answer_key: "numericInput.answerValue",
+  },
+  flashcard: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "flashcard.front",
+    // Flashcards have no author-editable answer; a backend answer_key error
+    // belongs beside the card text rather than nowhere.
+    answer_key: "flashcard.back",
+  },
+};
+
+/**
+ * Each supported type contributes a fields section, a preview and a section
+ * heading. Adding a type is a new row here plus its two modules — never a new
+ * editor, a new save pipeline or a new keyboard listener.
+ */
+const EDITOR_SECTIONS: Record<
+  SupportedEditorType,
+  {
+    heading: string;
+    Fields: (props: { form: UseFormReturn<EditorFormValues> }) => ReactNode;
+    Preview: (props: { values: EditorFormValues }) => ReactNode;
+  }
+> = {
+  multiple_choice: {
+    heading: "Soru ve şıklar",
+    Fields: MultipleChoiceFields,
+    Preview: MultipleChoicePreview,
+  },
+  true_false: {
+    heading: "Soru içeriği",
+    Fields: TrueFalseFields,
+    Preview: TrueFalsePreview,
+  },
+  fill_blank: {
+    heading: "Soru içeriği",
+    Fields: FillBlankFields,
+    Preview: FillBlankPreview,
+  },
+  numeric_input: {
+    heading: "Soru ve cevap",
+    Fields: NumericInputFields,
+    Preview: NumericInputPreview,
+  },
+  flashcard: {
+    heading: "Kart içeriği",
+    Fields: FlashcardFields,
+    Preview: FlashcardPreview,
+  },
 };
 
 type SaveIntent = "save" | "save-new";
@@ -162,7 +240,7 @@ export function EditorAccessDenied() {
 export function EditorUnsupportedType() {
   return (
     <SafeState
-      message="Bu soru tipi çoktan seçmeli, doğru / yanlış ve boşluk doldurma editörleriyle değiştirilemez."
+      message="Bu soru tipi bu editörle değiştirilemez. Çoktan seçmeli, doğru / yanlış, boşluk doldurma, sayısal cevap ve bilgi kartı soruları düzenlenebilir."
       title="Bu soru tipi henüz bu editörde desteklenmiyor."
     />
   );
@@ -530,6 +608,7 @@ export function ExerciseEditor({
     ? (detailQuery.data?.status ?? "draft")
     : "draft";
   const headings = editorTypeHeadings[activeType];
+  const section = EDITOR_SECTIONS[activeType];
 
   return (
     <div className="space-y-6">
@@ -598,9 +677,9 @@ export function ExerciseEditor({
        * there is exactly one form element for every editor type. A form
        * without an explicit method submits natively with GET, so a submit that
        * lands before React hydrates (or with JavaScript disabled or broken)
-       * would serialise every field — statement, stem, option texts, the
-       * template, choices, the answer, explanation — into the URL query
-       * string, and from there into
+       * would serialise every field — stem, statement, option texts, the
+       * template, choices, card faces, the answer, explanation — into the URL
+       * query string, and from there into
        * history, referrers and access logs. POST keeps the answer key in the
        * request body; the page route does not handle POST, so the native
        * submit simply fails instead of leaking.
@@ -701,18 +780,10 @@ export function ExerciseEditor({
             className="space-y-4 border-t border-border pt-5"
           >
             <h2 className="text-sm font-semibold" id="question-fields">
-              {activeType === "multiple_choice"
-                ? "Soru ve şıklar"
-                : "Soru içeriği"}
+              {section.heading}
             </h2>
 
-            {activeType === "multiple_choice" ? (
-              <MultipleChoiceFields form={form} />
-            ) : activeType === "true_false" ? (
-              <TrueFalseFields form={form} />
-            ) : (
-              <FillBlankFields form={form} />
-            )}
+            <section.Fields form={form} />
 
             <div>
               <div className="flex items-center justify-between gap-3">
@@ -772,13 +843,7 @@ export function ExerciseEditor({
           </div>
         </div>
 
-        {activeType === "multiple_choice" ? (
-          <MultipleChoicePreview values={values} />
-        ) : activeType === "true_false" ? (
-          <TrueFalsePreview values={values} />
-        ) : (
-          <FillBlankPreview values={values} />
-        )}
+        <section.Preview values={values} />
       </form>
     </div>
   );

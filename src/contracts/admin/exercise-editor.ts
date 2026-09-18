@@ -77,11 +77,70 @@ export const fillBlankAnswerKeySchema = z.object({
   blanks: z.array(z.string()),
 });
 
+/**
+ * The backend validates numbers with PHP's is_numeric(), which also accepts
+ * numeric strings, so a stored row may legitimately carry "375" instead of
+ * 375. Detail reads normalise either form to a finite JSON number rather than
+ * rejecting backend-valid content; mutations are strict (see below).
+ */
+const backendNumberSchema = z
+  .union([z.number(), z.string()])
+  .transform((value, context) => {
+    if (typeof value === "string" && value.trim().length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "Sayısal bir değer bekleniyor.",
+      });
+      return z.NEVER;
+    }
+
+    const parsed = typeof value === "number" ? value : Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      context.addIssue({
+        code: "custom",
+        message: "Sayısal bir değer bekleniyor.",
+      });
+      return z.NEVER;
+    }
+
+    return parsed;
+  });
+
+export const numericInputContentSchema = z.object({
+  stem: z.string(),
+  // Real seed rows exist without a suffix, so it can never be required.
+  suffix: z.string().optional(),
+});
+
+export const numericInputAnswerKeyDetailSchema = z.object({
+  value: backendNumberSchema,
+  // The backend reads $answerKey['tolerance'] ?? 0, so a missing tolerance is
+  // a stored zero.
+  tolerance: backendNumberSchema.optional(),
+});
+
+export const flashcardContentSchema = z.object({
+  front: z.string(),
+  back: z.string(),
+});
+
+/**
+ * FlashcardValidator ignores the answer key entirely — it validates only the
+ * front and back text — so self_assessed is optional on read. The editor still
+ * writes a canonical value (see flashcardEditableSchema).
+ */
+export const flashcardAnswerKeyDetailSchema = z.object({
+  self_assessed: z.boolean().optional(),
+});
+
 /** The exercise types this editor is allowed to create and update. */
 export const supportedEditorTypeSchema = z.enum([
   "multiple_choice",
   "true_false",
   "fill_blank",
+  "numeric_input",
+  "flashcard",
 ]);
 
 export type SupportedEditorType = z.infer<typeof supportedEditorTypeSchema>;
@@ -121,6 +180,16 @@ const detailShapeByType = {
     content: fillBlankContentSchema,
     answerKey: fillBlankAnswerKeySchema,
     label: "Boşluk doldurma",
+  },
+  numeric_input: {
+    content: numericInputContentSchema,
+    answerKey: numericInputAnswerKeyDetailSchema,
+    label: "Sayısal cevap",
+  },
+  flashcard: {
+    content: flashcardContentSchema,
+    answerKey: flashcardAnswerKeyDetailSchema,
+    label: "Bilgi kartı",
   },
 } as const;
 
@@ -244,16 +313,49 @@ export const fillBlankEditableSchema = z
  * the object schemas strip id/status/version/stats/owner_course_id — plus
  * owner_unit_id on update — so a crafted browser body cannot mass-assign them.
  */
+/**
+ * Mutations are strict where detail reads are lenient: the editor always sends
+ * canonical finite JSON numbers, so a crafted body carrying "375" or "0" as a
+ * string is rejected here instead of being coerced on its way to the backend.
+ */
+const finiteNumberSchema = z
+  .number({ error: "Sayısal bir değer bekleniyor." })
+  .refine(Number.isFinite, "Sayısal bir değer bekleniyor.");
+
+export const numericInputEditableSchema = z.object({
+  type: z.literal("numeric_input"),
+  ...commonEditableFields,
+  content: numericInputContentSchema,
+  answer_key: z.object({
+    value: finiteNumberSchema,
+    tolerance: finiteNumberSchema.min(0, "Tolerans negatif olamaz."),
+  }),
+});
+
+export const flashcardEditableSchema = z.object({
+  type: z.literal("flashcard"),
+  ...commonEditableFields,
+  content: flashcardContentSchema,
+  // Whatever the browser puts here is discarded and replaced by the canonical
+  // value: the answer key is editor metadata, not a user-controlled field, so
+  // it is not a mass-assignment surface.
+  answer_key: z.object({}).transform(() => ({ self_assessed: true as const })),
+});
+
 export const editableExerciseSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema,
   trueFalseEditableSchema,
   fillBlankEditableSchema,
+  numericInputEditableSchema,
+  flashcardEditableSchema,
 ]);
 
 export const createExerciseRequestSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   trueFalseEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   fillBlankEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  numericInputEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  flashcardEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
 ]);
 
 export const updateExerciseRequestSchema = editableExerciseSchema;
@@ -280,6 +382,8 @@ export type CourseTopicsResponse = z.infer<typeof courseTopicsResponseSchema>;
 export type MultipleChoiceContent = z.infer<typeof multipleChoiceContentSchema>;
 export type TrueFalseContent = z.infer<typeof trueFalseContentSchema>;
 export type FillBlankContent = z.infer<typeof fillBlankContentSchema>;
+export type NumericInputContent = z.infer<typeof numericInputContentSchema>;
+export type FlashcardContent = z.infer<typeof flashcardContentSchema>;
 export type EditableExercise = z.infer<typeof editableExerciseSchema>;
 export type ExerciseDetail = z.infer<typeof exerciseDetailDataSchema>;
 export type ExerciseDetailResponse = z.infer<

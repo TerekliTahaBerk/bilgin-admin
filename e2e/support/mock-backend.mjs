@@ -357,11 +357,19 @@ const EXERCISE_DETAILS = {
 function previewOf(detail) {
   if (detail.type === "true_false") return detail.content.statement;
   if (detail.type === "fill_blank") return detail.content.template;
+  if (detail.type === "flashcard") return detail.content.front;
   return detail.content.stem;
 }
 
 /** The answer key shape differs per type; `false` is a real answer. */
 function answerKeyChanged(current, next) {
+  if ("self_assessed" in next || "self_assessed" in current) {
+    // Flashcards carry no author-editable answer.
+    return false;
+  }
+  if ("tolerance" in next || "tolerance" in current) {
+    return current.value !== next.value || current.tolerance !== next.tolerance;
+  }
   if ("blanks" in next || "blanks" in current) {
     return JSON.stringify(current.blanks) !== JSON.stringify(next.blanks);
   }

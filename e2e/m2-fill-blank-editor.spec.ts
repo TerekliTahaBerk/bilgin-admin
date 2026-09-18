@@ -35,7 +35,7 @@ test("creates a real fill blank draft from a caret insertion and enters edit mod
 }) => {
   await signIn(page);
   await page.goto(LIST_PATH);
-  await page.getByRole("link", { name: "Yeni boşluk doldurma" }).click();
+  await page.getByRole("link", { name: "Boşluk doldurma" }).click();
   await expect(page).toHaveURL(`${E2E_BASE_URL}${NEW_PATH}`);
   await expect(
     page.getByRole("heading", { name: "Yeni boşluk doldurma sorusu" }),
@@ -195,9 +195,11 @@ test("reviewer sees no fill blank create or edit surface and is refused by the B
   await page.goto(LIST_PATH);
 
   for (const name of [
-    "Yeni çoktan seçmeli",
-    "Yeni doğru / yanlış",
-    "Yeni boşluk doldurma",
+    "Çoktan seçmeli",
+    "Doğru / yanlış",
+    "Boşluk doldurma",
+    "Sayısal cevap",
+    "Bilgi kartı",
     "Düzenle",
   ]) {
     await expect(page.getByRole("link", { name })).toHaveCount(0);
