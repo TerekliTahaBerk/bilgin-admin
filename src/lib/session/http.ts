@@ -33,10 +33,13 @@ export function createSessionSuccessResponse(admin: SafeAdmin): NextResponse {
  * Session-bound resource payload. `no-store` keeps it out of shared HTTP
  * caches; short-lived client caching is TanStack Query's job.
  */
-export function createResourceSuccessResponse(data: unknown): NextResponse {
+export function createResourceSuccessResponse(
+  data: unknown,
+  status: number = 200,
+): NextResponse {
   return NextResponse.json(
     { data },
-    { status: 200, headers: SESSION_NO_STORE_HEADERS },
+    { status, headers: SESSION_NO_STORE_HEADERS },
   );
 }
 

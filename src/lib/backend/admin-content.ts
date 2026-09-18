@@ -9,6 +9,18 @@ import {
   type UnitsResponse,
 } from "@/contracts/admin/content";
 import {
+  courseTopicsResponseSchema,
+  createExerciseResponseSchema,
+  exerciseDetailResponseSchema,
+  updateExerciseResponseSchema,
+  type CourseTopicsResponse,
+  type CreateExerciseRequest,
+  type CreateExerciseResponse,
+  type ExerciseDetailResponse,
+  type UpdateExerciseRequest,
+  type UpdateExerciseResponse,
+} from "@/contracts/admin/exercise-editor";
+import {
   requireExerciseFilters,
   type ExerciseServerFilters,
 } from "@/features/content/exercise-filters";
@@ -86,6 +98,72 @@ export const adminContent = Object.freeze({
         signal: options.signal,
       },
       unitExercisesResponseSchema,
+    );
+  },
+
+  topics(
+    courseId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<CourseTopicsResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "topics",
+        courseId: requireResourceId(courseId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      courseTopicsResponseSchema,
+    );
+  },
+
+  exerciseDetail(
+    exerciseId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<ExerciseDetailResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "exerciseDetail",
+        exerciseId: requireResourceId(exerciseId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      exerciseDetailResponseSchema,
+    );
+  },
+
+  createExercise(
+    input: CreateExerciseRequest,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<CreateExerciseResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "createExercise",
+        body: input,
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      createExerciseResponseSchema,
+    );
+  },
+
+  updateExercise(
+    exerciseId: number,
+    input: UpdateExerciseRequest,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<UpdateExerciseResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "updateExercise",
+        exerciseId: requireResourceId(exerciseId),
+        body: input,
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      updateExerciseResponseSchema,
     );
   },
 });

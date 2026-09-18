@@ -3,6 +3,10 @@ import "server-only";
 import type { z } from "zod";
 
 import type { AdminLoginRequest } from "@/contracts/admin/auth";
+import type {
+  CreateExerciseRequest,
+  UpdateExerciseRequest,
+} from "@/contracts/admin/exercise-editor";
 import {
   createNetworkError,
   createProtocolError,
@@ -22,6 +26,9 @@ export const ADMIN_ME_TIMEOUT_MS = 10_000;
 export const ADMIN_COURSES_TIMEOUT_MS = 10_000;
 export const ADMIN_UNITS_TIMEOUT_MS = 10_000;
 export const ADMIN_EXERCISES_TIMEOUT_MS = 10_000;
+export const ADMIN_TOPICS_TIMEOUT_MS = 10_000;
+export const ADMIN_EXERCISE_DETAIL_TIMEOUT_MS = 10_000;
+export const ADMIN_EXERCISE_MUTATION_TIMEOUT_MS = 15_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -53,6 +60,26 @@ const ADMIN_BACKEND_ENDPOINTS = {
       `/api/admin/v1/units/${unitId}/exercises${query}`,
     timeoutMs: ADMIN_EXERCISES_TIMEOUT_MS,
   },
+  topics: {
+    method: "GET",
+    path: (courseId: number) => `/api/admin/v1/courses/${courseId}/topics`,
+    timeoutMs: ADMIN_TOPICS_TIMEOUT_MS,
+  },
+  exerciseDetail: {
+    method: "GET",
+    path: (exerciseId: number) => `/api/admin/v1/exercises/${exerciseId}`,
+    timeoutMs: ADMIN_EXERCISE_DETAIL_TIMEOUT_MS,
+  },
+  createExercise: {
+    method: "POST",
+    path: "/api/admin/v1/exercises",
+    timeoutMs: ADMIN_EXERCISE_MUTATION_TIMEOUT_MS,
+  },
+  updateExercise: {
+    method: "PATCH",
+    path: (exerciseId: number) => `/api/admin/v1/exercises/${exerciseId}`,
+    timeoutMs: ADMIN_EXERCISE_MUTATION_TIMEOUT_MS,
+  },
 } as const;
 
 export type BackendResult<Value> =
@@ -83,6 +110,31 @@ type AdminBackendRequest =
       operation: "exercises";
       unitId: number;
       filters: ExerciseServerFilters;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "topics";
+      courseId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "exerciseDetail";
+      exerciseId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "createExercise";
+      body: CreateExerciseRequest;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "updateExercise";
+      exerciseId: number;
+      body: UpdateExerciseRequest;
       backendToken: string;
       signal?: AbortSignal;
     }>;
@@ -142,6 +194,21 @@ function endpointPath(request: AdminBackendRequest): string {
     );
   }
 
+  if (request.operation === "topics") {
+    return ADMIN_BACKEND_ENDPOINTS.topics.path(
+      requireResourceId(request.courseId),
+    );
+  }
+
+  if (
+    request.operation === "exerciseDetail" ||
+    request.operation === "updateExercise"
+  ) {
+    return ADMIN_BACKEND_ENDPOINTS[request.operation].path(
+      requireResourceId(request.exerciseId),
+    );
+  }
+
   return ADMIN_BACKEND_ENDPOINTS[request.operation].path;
 }
 
@@ -163,6 +230,14 @@ function createBackendRequest(request: AdminBackendRequest): {
     init.body = JSON.stringify(request.body);
   } else {
     headers.set("Authorization", `Bearer ${request.backendToken}`);
+
+    if (
+      request.operation === "createExercise" ||
+      request.operation === "updateExercise"
+    ) {
+      headers.set("Content-Type", "application/json");
+      init.body = JSON.stringify(request.body);
+    }
   }
 
   return {

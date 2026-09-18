@@ -62,7 +62,17 @@ function StatsLine({ exercise }: { exercise: ExerciseListItem }) {
   );
 }
 
-function ExerciseRow({ exercise }: { exercise: ExerciseListItem }) {
+function ExerciseRow({
+  canEdit,
+  courseId,
+  exercise,
+  unitId,
+}: {
+  canEdit: boolean;
+  courseId: number;
+  exercise: ExerciseListItem;
+  unitId: number;
+}) {
   return (
     // Read-only: the exercise detail route arrives with the M2 editor.
     <li className="flex flex-col gap-2 px-4 py-3 sm:px-5">
@@ -107,6 +117,16 @@ function ExerciseRow({ exercise }: { exercise: ExerciseListItem }) {
       </div>
 
       <StatsLine exercise={exercise} />
+      {canEdit && exercise.type === "multiple_choice" ? (
+        <div>
+          <Link
+            className="text-xs font-semibold text-primary hover:underline"
+            href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
+          >
+            Düzenle
+          </Link>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -182,6 +202,7 @@ function ErrorState({
 }
 
 export type ExercisesBrowserProps = Readonly<{
+  canEdit: boolean;
   courseId: number;
   unitId: number;
   filters: ExerciseFilterValues;
@@ -190,6 +211,7 @@ export type ExercisesBrowserProps = Readonly<{
 }>;
 
 export function ExercisesBrowser({
+  canEdit,
   courseId,
   unitId,
   filters,
@@ -295,11 +317,21 @@ export function ExercisesBrowser({
 
   const unitTitle = exercisesQuery.data?.unit.title ?? unit?.title ?? "Sorular";
   const header = (
-    <HeaderShell
-      courseId={courseId}
-      subtitle={course === undefined ? undefined : course.name}
-      title={unitTitle}
-    />
+    <div className="relative">
+      <HeaderShell
+        courseId={courseId}
+        subtitle={course === undefined ? undefined : course.name}
+        title={unitTitle}
+      />
+      {canEdit ? (
+        <Link
+          className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white sm:absolute sm:bottom-5 sm:right-0 sm:mt-0"
+          href={`/courses/${courseId}/units/${unitId}/exercises/new`}
+        >
+          Yeni çoktan seçmeli soru
+        </Link>
+      ) : null}
+    </div>
   );
 
   function body() {
@@ -373,7 +405,13 @@ export function ExercisesBrowser({
 
             <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
               {visible.map((exercise) => (
-                <ExerciseRow exercise={exercise} key={exercise.id} />
+                <ExerciseRow
+                  canEdit={canEdit}
+                  courseId={courseId}
+                  exercise={exercise}
+                  key={exercise.id}
+                  unitId={unitId}
+                />
               ))}
             </ul>
           </>

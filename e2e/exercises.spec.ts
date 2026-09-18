@@ -174,22 +174,22 @@ test("keeps the session when the unit does not exist", async ({ page }) => {
   );
 });
 
-test("offers no write action and no exercise navigation", async ({ page }) => {
+test("offers only the supported multiple-choice editor actions", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto(EXERCISES_PATH);
   await expect(rows(page)).toHaveCount(5);
 
-  for (const absent of ["Yeni Soru", "Arşivle", "Yayınla", "Kaydet"]) {
+  await expect(
+    page.getByRole("link", { name: "Yeni çoktan seçmeli soru" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(1);
+
+  for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-
-  // Exercise rows are inert; the only link is the way back.
-  const hrefs = await page
-    .locator("main a")
-    .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
-
-  expect(hrefs).toEqual([`/courses/${E2E_COURSE_WITH_UNITS_ID}`]);
-  await expect(page.locator("main ul li a")).toHaveCount(0);
+  await expect(page.locator("main ul li a")).toHaveCount(1);
   await expect(page.locator("main ul li button")).toHaveCount(0);
 });
 

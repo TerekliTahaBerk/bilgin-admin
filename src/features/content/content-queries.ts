@@ -3,9 +3,15 @@ import type {
   Unit,
   UnitExercisesData,
 } from "@/contracts/admin/content";
+import type {
+  CourseTopicsData,
+  ExerciseDetail,
+} from "@/contracts/admin/exercise-editor";
 import {
+  getCourseTopics,
   getCourses,
   getCourseUnits,
+  getExerciseDetail,
   getUnitExercises,
 } from "@/features/content/content-client";
 import type { ExerciseServerFilters } from "@/features/content/exercise-filters";
@@ -15,11 +21,20 @@ import type { ExerciseServerFilters } from "@/features/content/exercise-filters"
  * resource instead of importing keys across client components.
  */
 export const CONTENT_STALE_TIME_MS = 120_000;
+export const TOPICS_STALE_TIME_MS = 300_000;
 
 export const coursesQueryKey = ["content", "courses"] as const;
 
 export function courseUnitsQueryKey(courseId: number) {
   return ["content", "courses", courseId, "units"] as const;
+}
+
+export function courseTopicsQueryKey(courseId: number) {
+  return ["content", "courses", courseId, "topics"] as const;
+}
+
+export function exerciseDetailQueryKey(exerciseId: number) {
+  return ["content", "exercises", exerciseId] as const;
 }
 
 export function coursesQueryOptions() {
@@ -40,6 +55,25 @@ export function courseUnitsQueryOptions(courseId: number) {
   };
 }
 
+export function courseTopicsQueryOptions(courseId: number) {
+  return {
+    queryKey: courseTopicsQueryKey(courseId),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<CourseTopicsData> =>
+      getCourseTopics(courseId, { signal }),
+    staleTime: TOPICS_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
+  };
+}
+
+export function exerciseDetailQueryOptions(exerciseId: number) {
+  return {
+    queryKey: exerciseDetailQueryKey(exerciseId),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<ExerciseDetail> =>
+      getExerciseDetail(exerciseId, { signal }),
+    staleTime: CONTENT_STALE_TIME_MS,
+  };
+}
+
 /**
  * Only the server filters belong in the key. Topic and difficulty are applied
  * to the loaded array, so including them would split the cache and trigger a
@@ -56,6 +90,10 @@ export function unitExercisesQueryKey(
     "exercises",
     { type: filters.type ?? null, status: filters.status ?? null },
   ] as const;
+}
+
+export function unitExercisesQueryPrefix(unitId: number) {
+  return ["content", "units", unitId, "exercises"] as const;
 }
 
 export function unitExercisesQueryOptions(

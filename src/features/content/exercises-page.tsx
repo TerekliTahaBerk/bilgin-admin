@@ -19,9 +19,11 @@ import { ExercisesBrowser } from "@/features/content/exercises-browser";
  * loop.
  */
 export function ExercisesPage({
+  canEdit,
   courseId,
   unitId,
 }: {
+  canEdit: boolean;
   courseId: number;
   unitId: number;
 }) {
@@ -103,6 +105,7 @@ export function ExercisesPage({
 
   return (
     <ExercisesBrowser
+      canEdit={canEdit}
       courseId={courseId}
       filters={filters}
       onClearFilters={clear}

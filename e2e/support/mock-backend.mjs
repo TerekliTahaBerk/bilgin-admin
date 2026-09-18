@@ -26,9 +26,24 @@ const ADMIN = {
   },
 };
 
+const REVIEWER = {
+  id: "01a0ab9b-0000-4000-8000-0000000000e5",
+  name: "İçerik Denetçisi",
+  email: "reviewer@bilgin.test",
+  role: "content_reviewer",
+  role_label: "İçerik Denetçisi",
+  abilities: {
+    edit_content: false,
+    publish_content: true,
+    edit_curriculum: false,
+    view_users: false,
+  },
+};
+
 // Test-only credentials. These are not real credentials for any environment.
 const VALID_EMAIL = "editor@bilgin.test";
 const VALID_PASSWORD = "test-password";
+const REVIEWER_TOKEN = "test-e2e-reviewer-token";
 
 /**
  * Deliberately varied: several scopes, every publish status the backend can
@@ -208,6 +223,91 @@ const EXERCISES = {
   31: [],
 };
 
+const TOPICS = {
+  1: {
+    course: { id: 1, name: "TYT Türkçe" },
+    subject_id: 1,
+    topics: [
+      {
+        id: 1,
+        code: "ilk_turk_devletleri",
+        name: "İlk Türk Devletleri",
+        grade_level: 9,
+        exercise_count: 2,
+      },
+      {
+        id: 2,
+        code: "kultur_medeniyet",
+        name: "Kültür ve Medeniyet",
+        parent_id: 1,
+        exercise_count: 3,
+      },
+    ],
+  },
+  3: {
+    course: { id: 3, name: "AYT Fizik" },
+    subject_id: 3,
+    topics: [
+      {
+        id: 31,
+        code: "vektorler",
+        name: "Vektörler",
+        grade_level: 11,
+        exercise_count: 0,
+      },
+    ],
+  },
+};
+
+const EXERCISE_DETAILS = {
+  101: {
+    id: 101,
+    type: "multiple_choice",
+    topic_id: 1,
+    difficulty: 1,
+    content: {
+      stem: "Orhun Yazıtları hangi Türk devletine aittir?",
+      options: [
+        { id: "a", text: "Asya Hun" },
+        { id: "b", text: "II. Göktürk" },
+        { id: "c", text: "Uygur" },
+        { id: "d", text: "Hazar" },
+      ],
+    },
+    answer_key: { correct_option_id: "b" },
+    explanation: "Yazıtlar II. Göktürk dönemine aittir.",
+    applicable_scopes: ["tyt", "ayt"],
+    status: "published",
+    version: 1,
+    stats: {
+      attempts: 0,
+      correct_rate: null,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
+  102: {
+    id: 102,
+    type: "true_false",
+    topic_id: 1,
+    difficulty: 3,
+    content: { statement: "Uygurlar yerleşik hayata geçti." },
+    answer_key: { value: true },
+    explanation: null,
+    applicable_scopes: ["tyt"],
+    status: "draft",
+    version: 2,
+    stats: {
+      attempts: 41,
+      correct_rate: 97,
+      avg_seconds: 7,
+      needs_review: true,
+    },
+  },
+};
+
+let nextExerciseId = 201;
+
 const UNIT_TITLES = Object.fromEntries(
   Object.values(UNITS)
     .flat()
@@ -226,6 +326,13 @@ function send(response, status, body) {
 
 function envelope(data) {
   return { data, meta: { server_time: new Date().toISOString() } };
+}
+
+function adminForRequest(request) {
+  const authorization = request.headers.authorization;
+  if (authorization === `Bearer ${E2E_BACKEND_TOKEN}`) return ADMIN;
+  if (authorization === `Bearer ${REVIEWER_TOKEN}`) return REVIEWER;
+  return null;
 }
 
 function readBody(request) {
@@ -259,8 +366,13 @@ const server = createServer(async (request, response) => {
   ) {
     const body = await readBody(request);
 
-    if (body.email === VALID_EMAIL && body.password === VALID_PASSWORD) {
+    if (body.password === VALID_PASSWORD && body.email === VALID_EMAIL) {
       send(response, 200, envelope({ token: E2E_BACKEND_TOKEN, admin: ADMIN }));
+      return;
+    }
+
+    if (body.password === VALID_PASSWORD && body.email === REVIEWER.email) {
+      send(response, 200, envelope({ token: REVIEWER_TOKEN, admin: REVIEWER }));
       return;
     }
 
@@ -274,7 +386,7 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/admin/v1/courses") {
-    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+    if (adminForRequest(request) === null) {
       send(response, 401, { message: "Unauthenticated." });
       return;
     }
@@ -288,7 +400,7 @@ const server = createServer(async (request, response) => {
   );
 
   if (request.method === "GET" && unitsMatch !== null) {
-    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+    if (adminForRequest(request) === null) {
       send(response, 401, { message: "Unauthenticated." });
       return;
     }
@@ -309,7 +421,7 @@ const server = createServer(async (request, response) => {
   );
 
   if (request.method === "GET" && exercisesMatch !== null) {
-    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+    if (adminForRequest(request) === null) {
       send(response, 401, { message: "Unauthenticated." });
       return;
     }
@@ -342,8 +454,134 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/admin/v1/me") {
+  const topicsMatch = /^\/api\/admin\/v1\/courses\/(\d+)\/topics$/.exec(
+    url.pathname,
+  );
+
+  if (request.method === "GET" && topicsMatch !== null) {
+    if (adminForRequest(request) === null) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+    const topics = TOPICS[Number(topicsMatch[1])];
+    if (topics === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    send(response, 200, envelope(topics));
+    return;
+  }
+
+  const detailMatch = /^\/api\/admin\/v1\/exercises\/(\d+)$/.exec(url.pathname);
+
+  if (request.method === "GET" && detailMatch !== null) {
+    if (adminForRequest(request) === null) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+    const exercise = EXERCISE_DETAILS[Number(detailMatch[1])];
+    if (exercise === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    send(response, 200, envelope(exercise));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/v1/exercises") {
     if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+      send(response, adminForRequest(request) === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const body = await readBody(request);
+    const id = nextExerciseId++;
+    const detail = {
+      id,
+      type: "multiple_choice",
+      topic_id: body.topic_id,
+      difficulty: body.difficulty,
+      content: body.content,
+      answer_key: body.answer_key,
+      explanation: body.explanation,
+      applicable_scopes: body.applicable_scopes,
+      status: "draft",
+      version: 1,
+      stats: {
+        attempts: 0,
+        correct_rate: null,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    };
+    EXERCISE_DETAILS[id] = detail;
+    const unitId = Number(body.owner_unit_id);
+    EXERCISES[unitId] ??= [];
+    EXERCISES[unitId].push({
+      id,
+      type: detail.type,
+      topic: {
+        id: detail.topic_id,
+        name:
+          TOPICS[1].topics.find((topic) => topic.id === detail.topic_id)
+            ?.name ?? "Konu",
+      },
+      difficulty: detail.difficulty,
+      status: detail.status,
+      version: detail.version,
+      scopes: detail.applicable_scopes,
+      preview: detail.content.stem,
+      stats: detail.stats,
+    });
+    send(response, 201, envelope({ id, status: "draft" }));
+    return;
+  }
+
+  if (request.method === "PATCH" && detailMatch !== null) {
+    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+      send(response, adminForRequest(request) === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const id = Number(detailMatch[1]);
+    const current = EXERCISE_DETAILS[id];
+    if (current === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    const body = await readBody(request);
+    const answerChanged =
+      body.answer_key.correct_option_id !==
+      current.answer_key.correct_option_id;
+    Object.assign(current, body, { version: current.version + 1 });
+    for (const exercises of Object.values(EXERCISES)) {
+      const row = exercises.find((exercise) => exercise.id === id);
+      if (row !== undefined)
+        Object.assign(row, {
+          preview: current.content.stem,
+          version: current.version,
+        });
+    }
+    send(
+      response,
+      200,
+      envelope({
+        id,
+        version: current.version,
+        ...(answerChanged ? { answer_key_changed: true } : {}),
+        ...(answerChanged && current.status === "published"
+          ? { warning: "Cevap anahtarı değişti; bu soru daha önce çözülmüştü." }
+          : {}),
+      }),
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/v1/me") {
+    const admin = adminForRequest(request);
+    if (admin === null) {
       send(response, 401, { message: "Unauthenticated." });
       return;
     }
@@ -352,11 +590,11 @@ const server = createServer(async (request, response) => {
       response,
       200,
       envelope({
-        id: ADMIN.id,
-        name: ADMIN.name,
-        email: ADMIN.email,
-        role: ADMIN.role,
-        role_label: ADMIN.role_label,
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+        role_label: admin.role_label,
       }),
     );
     return;

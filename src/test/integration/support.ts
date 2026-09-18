@@ -59,6 +59,29 @@ export function resourceRequest(
   return new NextRequest(`${APP_ORIGIN}${path}`, { headers });
 }
 
+export function mutationRequest(
+  path: string,
+  seal: string | null,
+  method: "POST" | "PATCH",
+  body: unknown,
+  extraHeaders: Record<string, string> = { origin: APP_ORIGIN },
+): NextRequest {
+  const headers = new Headers({
+    "content-type": "application/json",
+    ...extraHeaders,
+  });
+
+  if (seal !== null) {
+    headers.set("cookie", `${SESSION_COOKIE_NAME}=${seal}`);
+  }
+
+  return new NextRequest(`${APP_ORIGIN}${path}`, {
+    method,
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
 export function setCookieHeader(response: NextResponse): string | undefined {
   return response.headers
     .getSetCookie()
