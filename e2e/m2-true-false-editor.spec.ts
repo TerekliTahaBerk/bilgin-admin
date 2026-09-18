@@ -27,7 +27,7 @@ test("creates a real true/false draft with a false answer and enters edit mode",
 }) => {
   await signIn(page);
   await page.goto(LIST_PATH);
-  await page.getByRole("link", { name: "Yeni doğru / yanlış" }).click();
+  await page.getByRole("link", { name: "Doğru / yanlış" }).click();
   await expect(page).toHaveURL(`${E2E_BASE_URL}${NEW_PATH}`);
   await expect(
     page.getByRole("heading", { name: "Yeni doğru / yanlış sorusu" }),
@@ -175,12 +175,12 @@ test("reviewer sees no true/false create or edit surface and is refused by the B
   // Earlier tests in this suite mutate the seeded previews, so assert the
   // list renders at all rather than pinning one row's text.
   await expect(page.locator("main ul li").first()).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Yeni doğru / yanlış" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: "Yeni çoktan seçmeli" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Doğru / yanlış" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("link", { name: "Çoktan seçmeli" })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(0);
 
   await page.goto(NEW_PATH);

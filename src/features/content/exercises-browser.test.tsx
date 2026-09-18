@@ -525,26 +525,27 @@ describe("ExercisesBrowser editor actions", () => {
     renderBrowser({}, true);
     await screen.findByText("(önizleme yok)");
 
-    expect(
-      screen
-        .getByRole("link", { name: "Yeni çoktan seçmeli" })
-        .getAttribute("href"),
-    ).toBe(`/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new`);
-    expect(
-      screen
-        .getByRole("link", { name: "Yeni doğru / yanlış" })
-        .getAttribute("href"),
-    ).toBe(
-      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new?type=true_false`,
+    const base = `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new`;
+    const expected: [string, string][] = [
+      // multiple_choice keeps the bare route for backward compatibility.
+      ["Çoktan seçmeli", base],
+      ["Doğru / yanlış", `${base}?type=true_false`],
+      ["Boşluk doldurma", `${base}?type=fill_blank`],
+      ["Sayısal cevap", `${base}?type=numeric_input`],
+      ["Bilgi kartı", `${base}?type=flashcard`],
+    ];
+
+    const group = within(
+      screen.getByRole("group", { name: "Yeni soru oluştur" }),
     );
-    expect(
-      screen
-        .getByRole("link", { name: "Yeni boşluk doldurma" })
-        .getAttribute("href"),
-    ).toBe(
-      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new?type=fill_blank`,
-    );
-    // The seven remaining types have no create action.
+    for (const [label, href] of expected) {
+      expect(
+        group.getByRole("link", { name: label }).getAttribute("href"),
+      ).toBe(href);
+    }
+    expect(group.getAllByRole("link")).toHaveLength(expected.length);
+
+    // The five remaining types have no create action.
     expect(screen.queryByRole("link", { name: /eşleştirme/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /görsel/i })).toBeNull();
   });
@@ -563,18 +564,57 @@ describe("ExercisesBrowser editor actions", () => {
     ]);
   });
 
+  it("links Düzenle for every editable type and no others", async () => {
+    const rows = [
+      "multiple_choice",
+      "true_false",
+      "fill_blank",
+      "numeric_input",
+      "flashcard",
+      "matching",
+      "ordering",
+      "word_order",
+      "image_hotspot",
+      "diagram_label",
+    ].map((type, index) => ({
+      ...data.exercises[0]!,
+      id: index + 1,
+      type,
+      preview: `${type} önizleme`,
+    })) as UnitExercisesData["exercises"];
+    getUnitExercises.mockResolvedValue(unitData({ exercises: rows }));
+
+    renderBrowser({}, true);
+    await screen.findByText("multiple_choice önizleme");
+
+    // The five M3 editor types are editable; the other five stay read-only.
+    expect(
+      screen
+        .getAllByRole("link", { name: "Düzenle" })
+        .map((link) => link.getAttribute("href"))
+        .sort(),
+    ).toEqual(
+      [1, 2, 3, 4, 5]
+        .map((id) => `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/${id}`)
+        .sort(),
+    );
+  });
+
   it("shows no create or edit actions without edit_content", async () => {
     renderBrowser();
     await screen.findByText("(önizleme yok)");
     expect(
-      screen.queryByRole("link", { name: "Yeni çoktan seçmeli" }),
+      screen.queryByRole("group", { name: "Yeni soru oluştur" }),
     ).toBeNull();
-    expect(
-      screen.queryByRole("link", { name: "Yeni doğru / yanlış" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("link", { name: "Yeni boşluk doldurma" }),
-    ).toBeNull();
+    for (const label of [
+      "Çoktan seçmeli",
+      "Doğru / yanlış",
+      "Boşluk doldurma",
+      "Sayısal cevap",
+      "Bilgi kartı",
+    ]) {
+      expect(screen.queryByRole("link", { name: label })).toBeNull();
+    }
     expect(screen.queryByRole("link", { name: "Düzenle" })).toBeNull();
   });
 });

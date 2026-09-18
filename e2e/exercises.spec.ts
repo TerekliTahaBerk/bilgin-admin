@@ -157,7 +157,12 @@ test("shows an empty state for a unit with no exercises", async ({ page }) => {
   await expect(
     page.getByText("Bu ünitede henüz soru bulunmuyor."),
   ).toBeVisible();
-  await expect(page.getByText("Yeni Soru")).toHaveCount(0);
+  // An editor can still seed an empty unit, so the create group stays; what an
+  // empty unit must not offer is a row action.
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(0);
+  await expect(
+    page.getByRole("group", { name: "Yeni soru oluştur" }).getByRole("link"),
+  ).toHaveCount(5);
 });
 
 test("keeps the session when the unit does not exist", async ({ page }) => {
@@ -179,16 +184,18 @@ test("offers only the supported editor actions", async ({ page }) => {
   await page.goto(EXERCISES_PATH);
   await expect(rows(page)).toHaveCount(5);
 
-  await expect(
-    page.getByRole("link", { name: "Yeni çoktan seçmeli" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Yeni doğru / yanlış" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Yeni boşluk doldurma" }),
-  ).toBeVisible();
-  // The three M2 editor types are editable; matching and image_hotspot rows
+  const createGroup = page.getByRole("group", { name: "Yeni soru oluştur" });
+  for (const label of [
+    "Çoktan seçmeli",
+    "Doğru / yanlış",
+    "Boşluk doldurma",
+    "Sayısal cevap",
+    "Bilgi kartı",
+  ]) {
+    await expect(createGroup.getByRole("link", { name: label })).toBeVisible();
+  }
+  await expect(createGroup.getByRole("link")).toHaveCount(5);
+  // The seeded rows cover three editable types; matching and image_hotspot
   // stay read-only.
   await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(3);
 

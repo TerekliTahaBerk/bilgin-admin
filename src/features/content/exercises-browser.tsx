@@ -21,7 +21,10 @@ import {
   coursesQueryOptions,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
-import { isSupportedEditorType } from "@/contracts/admin/exercise-editor";
+import {
+  isSupportedEditorType,
+  type SupportedEditorType,
+} from "@/contracts/admin/exercise-editor";
 import { createExercisePath } from "@/features/content/exercise-editor";
 import { ExerciseFilterBar } from "@/features/content/exercise-filter-bar";
 import type { ExerciseFilterValues } from "@/features/content/exercise-filter-bar";
@@ -132,6 +135,15 @@ function ExerciseRow({
     </li>
   );
 }
+
+/** One entry per editable type, in authoring-frequency order. */
+const CREATE_ACTIONS: { type: SupportedEditorType; label: string }[] = [
+  { type: "multiple_choice", label: "Çoktan seçmeli" },
+  { type: "true_false", label: "Doğru / yanlış" },
+  { type: "fill_blank", label: "Boşluk doldurma" },
+  { type: "numeric_input", label: "Sayısal cevap" },
+  { type: "flashcard", label: "Bilgi kartı" },
+];
 
 function ListSkeleton() {
   return (
@@ -326,25 +338,29 @@ export function ExercisesBrowser({
         title={unitTitle}
       />
       {canEdit ? (
-        <div className="mt-4 flex flex-wrap gap-2 sm:absolute sm:bottom-5 sm:right-0 sm:mt-0">
-          <Link
-            className="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white"
-            href={createExercisePath(courseId, unitId, "multiple_choice")}
-          >
-            Yeni çoktan seçmeli
-          </Link>
-          <Link
-            className="inline-flex rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-muted"
-            href={createExercisePath(courseId, unitId, "true_false")}
-          >
-            Yeni doğru / yanlış
-          </Link>
-          <Link
-            className="inline-flex rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-muted"
-            href={createExercisePath(courseId, unitId, "fill_blank")}
-          >
-            Yeni boşluk doldurma
-          </Link>
+        /*
+         * Five equally weighted primary buttons would crowd the header, so the
+         * actions are compact links under one labelled group. A native group
+         * keeps them all reachable in one tab sequence with no new dependency
+         * and nothing hidden behind a toggle.
+         */
+        <div
+          aria-label="Yeni soru oluştur"
+          className="mt-4 sm:absolute sm:bottom-5 sm:right-0 sm:mt-0"
+          role="group"
+        >
+          <span className="text-xs font-medium text-muted">Yeni soru</span>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {CREATE_ACTIONS.map((action) => (
+              <Link
+                className="inline-flex rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-semibold hover:bg-surface-muted"
+                href={createExercisePath(courseId, unitId, action.type)}
+                key={action.type}
+              >
+                {action.label}
+              </Link>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

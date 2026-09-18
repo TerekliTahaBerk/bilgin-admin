@@ -88,12 +88,19 @@ test.describe("native exercise editor submit", () => {
     "template",
     "choices",
     "blanks",
+    "answerValue",
+    "tolerance",
+    "suffix",
+    "front",
+    "back",
   ];
   const STEM = "Pre hydration sizinti sorusu";
   const OPTION_TEXT = "Pre hydration sik metni";
   const EXPLANATION = "Pre hydration aciklamasi";
   const STATEMENT = "Pre hydration sizinti ifadesi";
   const FILL_BLANK_ANSWER = "Pre hydration sizinti cevabi";
+  const NUMERIC_ANSWER = "13579";
+  const CARD_BACK = "Pre hydration sizinti karti";
 
   async function signIn(page: Page) {
     await page.goto("/login");
@@ -128,6 +135,8 @@ test.describe("native exercise editor submit", () => {
       EXPLANATION,
       STATEMENT,
       FILL_BLANK_ANSWER,
+      NUMERIC_ANSWER,
+      CARD_BACK,
     ]) {
       expect(url).not.toContain(secret);
       expect(url).not.toContain(encodeURIComponent(secret));
@@ -297,5 +306,86 @@ test.describe("native exercise editor submit", () => {
 
     await page.waitForLoadState("load").catch(() => undefined);
     expectNoLeak(page.url(), { type: "fill_blank" });
+  });
+
+  test("native submit on the numeric route keeps only the safe type query", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`${NEW_PATH}?type=numeric_input`);
+
+    await page.getByLabel("Konu").selectOption("1");
+    await page.getByLabel("Soru kökü").fill(STEM);
+    await page.getByLabel("Doğru sayı").fill(NUMERIC_ANSWER);
+    await page.getByLabel("Birim / son ek (opsiyonel)").fill(OPTION_TEXT);
+    await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+    const form = page
+      .locator("form")
+      .filter({ has: page.locator("#numeric-value") });
+    await expect(form).toHaveAttribute("method", "post");
+
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (candidate) =>
+          candidate.isNavigationRequest() &&
+          candidate.url().includes("/exercises"),
+      ),
+      page.evaluate(() => {
+        const target = document
+          .querySelector("#numeric-value")
+          ?.closest("form");
+        if (target === null || target === undefined) {
+          throw new Error("editor form not found");
+        }
+        HTMLFormElement.prototype.submit.call(target);
+      }),
+    ]);
+
+    expect(request.method()).toBe("POST");
+    expectNoLeak(request.url(), { type: "numeric_input" });
+
+    await page.waitForLoadState("load").catch(() => undefined);
+    expectNoLeak(page.url(), { type: "numeric_input" });
+  });
+
+  test("native submit on the flashcard route keeps only the safe type query", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`${NEW_PATH}?type=flashcard`);
+
+    await page.getByLabel("Konu").selectOption("1");
+    await page.getByLabel("Ön yüz").fill(STEM);
+    await page.getByLabel("Arka yüz").fill(CARD_BACK);
+    await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+    const form = page
+      .locator("form")
+      .filter({ has: page.locator("#flashcard-front") });
+    await expect(form).toHaveAttribute("method", "post");
+
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (candidate) =>
+          candidate.isNavigationRequest() &&
+          candidate.url().includes("/exercises"),
+      ),
+      page.evaluate(() => {
+        const target = document
+          .querySelector("#flashcard-front")
+          ?.closest("form");
+        if (target === null || target === undefined) {
+          throw new Error("editor form not found");
+        }
+        HTMLFormElement.prototype.submit.call(target);
+      }),
+    ]);
+
+    expect(request.method()).toBe("POST");
+    expectNoLeak(request.url(), { type: "flashcard" });
+
+    await page.waitForLoadState("load").catch(() => undefined);
+    expectNoLeak(page.url(), { type: "flashcard" });
   });
 });

@@ -23,6 +23,20 @@ import {
   strictFillBlankBranchSchema,
 } from "@/features/content/fill-blank-form";
 import {
+  createFlashcardBranch,
+  flashcardBranchFromDetail,
+  flashcardBranchSchema,
+  serializeFlashcardBranch,
+  strictFlashcardBranchSchema,
+} from "@/features/content/flashcard-form";
+import {
+  createNumericInputBranch,
+  numericInputBranchFromDetail,
+  numericInputBranchSchema,
+  serializeNumericInputBranch,
+  strictNumericInputBranchSchema,
+} from "@/features/content/numeric-input-form";
+import {
   createTrueFalseBranch,
   serializeTrueFalseBranch,
   strictTrueFalseBranchSchema,
@@ -34,6 +48,8 @@ export const editorTypeLabels: Record<SupportedEditorType, string> = {
   multiple_choice: "Çoktan seçmeli",
   true_false: "Doğru / Yanlış",
   fill_blank: "Boşluk doldurma",
+  numeric_input: "Sayısal cevap",
+  flashcard: "Bilgi kartı",
 };
 
 export const editorTypeHeadings: Record<
@@ -51,6 +67,14 @@ export const editorTypeHeadings: Record<
   fill_blank: {
     create: "Yeni boşluk doldurma sorusu",
     edit: "Boşluk doldurma sorusunu düzenle",
+  },
+  numeric_input: {
+    create: "Yeni sayısal cevap sorusu",
+    edit: "Sayısal cevap sorusunu düzenle",
+  },
+  flashcard: {
+    create: "Yeni bilgi kartı",
+    edit: "Bilgi kartını düzenle",
   },
 };
 
@@ -77,12 +101,16 @@ const branchKeyByType = {
   multiple_choice: "multipleChoice",
   true_false: "trueFalse",
   fill_blank: "fillBlank",
+  numeric_input: "numericInput",
+  flashcard: "flashcard",
 } as const;
 
 const strictBranchByType = {
   multiple_choice: strictMultipleChoiceBranchSchema,
   true_false: strictTrueFalseBranchSchema,
   fill_blank: strictFillBlankBranchSchema,
+  numeric_input: strictNumericInputBranchSchema,
+  flashcard: strictFlashcardBranchSchema,
 } as const;
 
 /**
@@ -92,10 +120,18 @@ const strictBranchByType = {
  */
 export const editorFormSchema = commonEditorFieldsSchema
   .extend({
-    type: z.enum(["multiple_choice", "true_false", "fill_blank"]),
+    type: z.enum([
+      "multiple_choice",
+      "true_false",
+      "fill_blank",
+      "numeric_input",
+      "flashcard",
+    ]),
     multipleChoice: multipleChoiceBranchSchema,
     trueFalse: trueFalseBranchSchema,
     fillBlank: fillBlankBranchSchema,
+    numericInput: numericInputBranchSchema,
+    flashcard: flashcardBranchSchema,
   })
   .superRefine((values, context) => {
     const key = branchKeyByType[values.type];
@@ -137,6 +173,8 @@ export function createEditorDefaults(
     multipleChoice: createMultipleChoiceBranch(),
     trueFalse: createTrueFalseBranch(),
     fillBlank: createFillBlankBranch(),
+    numericInput: createNumericInputBranch(),
+    flashcard: createFlashcardBranch(),
   };
 }
 
@@ -180,8 +218,18 @@ export function formValuesFromDetail(
     return branch === null ? null : { ...common, trueFalse: branch };
   }
 
-  const branch = fillBlankBranchFromDetail(detail);
-  return branch === null ? null : { ...common, fillBlank: branch };
+  if (detail.type === "fill_blank") {
+    const branch = fillBlankBranchFromDetail(detail);
+    return branch === null ? null : { ...common, fillBlank: branch };
+  }
+
+  if (detail.type === "numeric_input") {
+    const branch = numericInputBranchFromDetail(detail);
+    return branch === null ? null : { ...common, numericInput: branch };
+  }
+
+  const branch = flashcardBranchFromDetail(detail);
+  return branch === null ? null : { ...common, flashcard: branch };
 }
 
 function editablePayload(values: EditorFormValues) {
@@ -208,7 +256,15 @@ function editablePayload(values: EditorFormValues) {
     return { ...serializeTrueFalseBranch(values.trueFalse), ...common };
   }
 
-  return { ...serializeFillBlankBranch(values.fillBlank), ...common };
+  if (values.type === "fill_blank") {
+    return { ...serializeFillBlankBranch(values.fillBlank), ...common };
+  }
+
+  if (values.type === "numeric_input") {
+    return { ...serializeNumericInputBranch(values.numericInput), ...common };
+  }
+
+  return { ...serializeFlashcardBranch(values.flashcard), ...common };
 }
 
 export function serializeCreateExercise(

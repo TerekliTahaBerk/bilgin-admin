@@ -101,6 +101,55 @@ export const validFillBlankDetailResponse = {
   meta: { server_time: "2026-09-18T10:00:00+00:00" },
 };
 
+/** A stored numeric question whose correct answer is the falsy number 0. */
+export const validNumericInputDetailResponse = {
+  data: {
+    id: 4,
+    type: "numeric_input",
+    topic_id: 1,
+    difficulty: 3,
+    content: { stem: "Sıfırıncı yıl hangisidir?", suffix: "yılı" },
+    answer_key: { value: 0, tolerance: 0 },
+    explanation: "Sıfır geçerli bir cevaptır.",
+    applicable_scopes: ["tyt"],
+    status: "published",
+    version: 2,
+    stats: {
+      attempts: 18,
+      correct_rate: 44,
+      avg_seconds: 15,
+      needs_review: false,
+    },
+  },
+  meta: { server_time: "2026-09-18T10:00:00+00:00" },
+};
+
+/** A stored flashcard. */
+export const validFlashcardDetailResponse = {
+  data: {
+    id: 5,
+    type: "flashcard",
+    topic_id: 1,
+    difficulty: 2,
+    content: {
+      front: "Kut",
+      back: "Yönetme yetkisinin Tanrı tarafından verildiği inancı.",
+    },
+    answer_key: { self_assessed: true },
+    explanation: null,
+    applicable_scopes: ["tyt", "ayt"],
+    status: "draft",
+    version: 1,
+    stats: {
+      attempts: 0,
+      correct_rate: null,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
+  meta: { server_time: "2026-09-18T10:00:00+00:00" },
+};
+
 export const validCreateExerciseResponse = {
   data: { id: 123, status: "draft" },
   meta: { server_time: "2026-09-18T10:00:00+00:00" },

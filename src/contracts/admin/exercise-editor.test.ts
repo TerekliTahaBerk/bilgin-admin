@@ -6,6 +6,8 @@ import {
   createExerciseResponseSchema,
   exerciseDetailResponseSchema,
   fillBlankContentSchema,
+  numericInputAnswerKeyDetailSchema,
+  numericInputContentSchema,
   updateExerciseRequestSchema,
   updateExerciseResponseSchema,
 } from "@/contracts/admin/exercise-editor";
@@ -13,6 +15,8 @@ import {
   validCreateExerciseResponse,
   validExerciseDetailResponse,
   validFillBlankDetailResponse,
+  validFlashcardDetailResponse,
+  validNumericInputDetailResponse,
   validTrueFalseDetailResponse,
   validTopicsResponse,
   validUpdateExerciseResponse,
@@ -81,13 +85,11 @@ describe("exercise editor backend contracts", () => {
     ).toBe(false);
   });
 
-  it("keeps the seven unsupported detail types readable for a safe UI state", () => {
+  it("keeps the five unsupported detail types readable for a safe UI state", () => {
     for (const type of [
       "matching",
       "ordering",
       "word_order",
-      "numeric_input",
-      "flashcard",
       "image_hotspot",
       "diagram_label",
     ]) {
@@ -504,5 +506,271 @@ describe("fill blank contracts", () => {
     expect(update).not.toHaveProperty("status");
     expect(update).not.toHaveProperty("version");
     expect(update).not.toHaveProperty("id");
+  });
+});
+
+const numericEditable = {
+  type: "numeric_input",
+  topic_id: 1,
+  difficulty: 3,
+  content: {
+    stem: "Kavimler Göçü hangi yılda gerçekleşmiştir?",
+    suffix: "yılı",
+  },
+  answer_key: { value: 375, tolerance: 0 },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+} as const;
+
+const flashcardEditable = {
+  type: "flashcard",
+  topic_id: 1,
+  difficulty: 2,
+  content: { front: "Kut", back: "Yönetme yetkisi inancı." },
+  answer_key: { self_assessed: true },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+} as const;
+
+function numericDetail(answerKey: unknown, content?: unknown) {
+  return {
+    ...validNumericInputDetailResponse,
+    data: {
+      ...validNumericInputDetailResponse.data,
+      answer_key: answerKey,
+      ...(content === undefined ? {} : { content }),
+    },
+  };
+}
+
+describe("numeric input contracts", () => {
+  it.each([
+    ["a positive integer", 375],
+    ["zero", 0],
+    ["a negative number", -4.5],
+    ["a decimal", 0.33],
+  ])("reads %s as the stored answer", (_label, value) => {
+    const parsed = exerciseDetailResponseSchema.parse(
+      numericDetail({ value, tolerance: 0 }),
+    );
+    expect(parsed.data.answer_key).toEqual({ value, tolerance: 0 });
+  });
+
+  it("normalises the numeric strings PHP is_numeric() accepts", () => {
+    expect(
+      numericInputAnswerKeyDetailSchema.parse({ value: "375", tolerance: "0" }),
+    ).toEqual({ value: 375, tolerance: 0 });
+    expect(numericInputAnswerKeyDetailSchema.parse({ value: "0" })).toEqual({
+      value: 0,
+      tolerance: undefined,
+    });
+    expect(numericInputAnswerKeyDetailSchema.parse({ value: "-2.5" })).toEqual({
+      value: -2.5,
+      tolerance: undefined,
+    });
+  });
+
+  it("leaves a missing tolerance absent for the form to default to 0", () => {
+    const parsed = numericInputAnswerKeyDetailSchema.parse({ value: 375 });
+    expect(parsed.tolerance).toBeUndefined();
+    expect(
+      exerciseDetailResponseSchema.safeParse(numericDetail({ value: 375 }))
+        .success,
+    ).toBe(true);
+  });
+
+  it("reads content with and without a suffix", () => {
+    expect(numericInputContentSchema.parse({ stem: "Soru?" })).toEqual({
+      stem: "Soru?",
+      suffix: undefined,
+    });
+    expect(
+      numericInputContentSchema.parse({ stem: "Soru?", suffix: "yılı" }),
+    ).toEqual({ stem: "Soru?", suffix: "yılı" });
+  });
+
+  it.each([
+    ["a missing value", {}],
+    ["a null value", { value: null }],
+    ["a non-numeric string", { value: "abc" }],
+    ["an empty string", { value: "  " }],
+    ["a boolean", { value: true }],
+  ])("refuses the unreadable answer key: %s", (_label, answerKey) => {
+    expect(
+      exerciseDetailResponseSchema.safeParse(numericDetail(answerKey)).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    ["an integer", 375],
+    ["zero", 0],
+    ["a negative number", -4.5],
+    ["a decimal", 0.33],
+  ])("accepts the mutation answer %s", (_label, value) => {
+    const parsed = createExerciseRequestSchema.parse({
+      ...numericEditable,
+      answer_key: { value, tolerance: 0 },
+      owner_unit_id: 12,
+    });
+    expect(parsed.answer_key).toEqual({ value, tolerance: 0 });
+  });
+
+  it("accepts a positive tolerance and omits an absent suffix", () => {
+    const parsed = createExerciseRequestSchema.parse({
+      ...numericEditable,
+      content: { stem: "Soru?" },
+      answer_key: { value: 1, tolerance: 0.01 },
+      owner_unit_id: 12,
+    });
+    expect(parsed.content).toEqual({ stem: "Soru?", suffix: undefined });
+    expect(parsed.type).toBe("numeric_input");
+    if (parsed.type !== "numeric_input") throw new Error("wrong branch");
+    expect(parsed.answer_key.tolerance).toBe(0.01);
+  });
+
+  it.each([
+    ['a string value "375"', { value: "375", tolerance: 0 }],
+    ['a string value "0"', { value: "0", tolerance: 0 }],
+    ['a string tolerance "0"', { value: 375, tolerance: "0" }],
+    ["a null value", { value: null, tolerance: 0 }],
+    ["a missing value", { tolerance: 0 }],
+    ["a missing tolerance", { value: 375 }],
+    ["a negative tolerance", { value: 375, tolerance: -1 }],
+  ])("rejects the mutation answer key with %s", (_label, answerKey) => {
+    expect(
+      createExerciseRequestSchema.safeParse({
+        ...numericEditable,
+        answer_key: answerKey,
+        owner_unit_id: 12,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateExerciseRequestSchema.safeParse({
+        ...numericEditable,
+        answer_key: answerKey,
+      }).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["-Infinity", Number.NEGATIVE_INFINITY],
+  ])("rejects the non-finite mutation answer %s", (_label, value) => {
+    expect(
+      createExerciseRequestSchema.safeParse({
+        ...numericEditable,
+        answer_key: { value, tolerance: 0 },
+        owner_unit_id: 12,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("strips ownership and lifecycle fields from numeric bodies", () => {
+    const create = createExerciseRequestSchema.parse({
+      ...numericEditable,
+      owner_unit_id: 12,
+      owner_course_id: 5,
+      id: 77,
+      status: "published",
+      version: 99,
+      stats: {},
+    });
+    const update = updateExerciseRequestSchema.parse({
+      ...numericEditable,
+      owner_unit_id: 999,
+      status: "archived",
+    });
+
+    for (const stripped of [
+      "owner_course_id",
+      "id",
+      "status",
+      "version",
+      "stats",
+    ]) {
+      expect(create).not.toHaveProperty(stripped);
+    }
+    expect(update).not.toHaveProperty("owner_unit_id");
+    expect(update).not.toHaveProperty("status");
+  });
+});
+
+describe("flashcard contracts", () => {
+  it("reads a stored card with its answer key", () => {
+    const parsed = exerciseDetailResponseSchema.parse(
+      validFlashcardDetailResponse,
+    );
+    expect(parsed.data.content).toEqual({
+      front: "Kut",
+      back: "Yönetme yetkisinin Tanrı tarafından verildiği inancı.",
+    });
+  });
+
+  it.each([
+    ["a missing self_assessed", {}],
+    ["self_assessed true", { self_assessed: true }],
+    ["self_assessed false", { self_assessed: false }],
+  ])("keeps a stored card readable with %s", (_label, answerKey) => {
+    // FlashcardValidator never inspects the answer key, so every one of these
+    // is a backend-valid row that must still open.
+    expect(
+      exerciseDetailResponseSchema.safeParse({
+        ...validFlashcardDetailResponse,
+        data: { ...validFlashcardDetailResponse.data, answer_key: answerKey },
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["a missing front", { back: "Arka" }],
+    ["a missing back", { front: "Ön" }],
+    ["a non-string face", { front: 7, back: "Arka" }],
+  ])("refuses the unreadable content: %s", (_label, content) => {
+    expect(
+      exerciseDetailResponseSchema.safeParse({
+        ...validFlashcardDetailResponse,
+        data: { ...validFlashcardDetailResponse.data, content },
+      }).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    ["self_assessed false", { self_assessed: false }],
+    ["extra keys", { self_assessed: false, other: "x", admin: true }],
+    ["an empty object", {}],
+  ])(
+    "canonicalises the mutation answer key sent as %s",
+    (_label, answerKey) => {
+      const parsed = createExerciseRequestSchema.parse({
+        ...flashcardEditable,
+        answer_key: answerKey,
+        owner_unit_id: 12,
+      });
+      expect(parsed.answer_key).toEqual({ self_assessed: true });
+    },
+  );
+
+  it("strips ownership and lifecycle fields from flashcard bodies", () => {
+    const create = createExerciseRequestSchema.parse({
+      ...flashcardEditable,
+      owner_unit_id: 12,
+      id: 77,
+      status: "published",
+      version: 9,
+      stats: {},
+    });
+    const update = updateExerciseRequestSchema.parse({
+      ...flashcardEditable,
+      owner_unit_id: 999,
+      version: 3,
+    });
+
+    expect(create).toMatchObject({ owner_unit_id: 12 });
+    for (const stripped of ["id", "status", "version", "stats"]) {
+      expect(create).not.toHaveProperty(stripped);
+    }
+    expect(update).not.toHaveProperty("owner_unit_id");
+    expect(update).not.toHaveProperty("version");
   });
 });
