@@ -521,26 +521,47 @@ describe("ExercisesBrowser hierarchy and errors", () => {
 });
 
 describe("ExercisesBrowser editor actions", () => {
-  it("shows create and only multiple-choice edit links with edit_content", async () => {
+  it("offers one create action per editable type with edit_content", async () => {
     renderBrowser({}, true);
     await screen.findByText("(önizleme yok)");
+
     expect(
       screen
-        .getByRole("link", { name: "Yeni çoktan seçmeli soru" })
+        .getByRole("link", { name: "Yeni çoktan seçmeli" })
         .getAttribute("href"),
     ).toBe(`/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new`);
-    const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
-    expect(editLinks).toHaveLength(1);
-    expect(editLinks[0]?.getAttribute("href")).toBe(
-      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
+    expect(
+      screen
+        .getByRole("link", { name: "Yeni doğru / yanlış" })
+        .getAttribute("href"),
+    ).toBe(
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/new?type=true_false`,
     );
+    // Step 03 types have no create action yet.
+    expect(screen.queryByRole("link", { name: /boşluk doldurma/i })).toBeNull();
+  });
+
+  it("links Düzenle for the editable types only", async () => {
+    renderBrowser({}, true);
+    await screen.findByText("(önizleme yok)");
+
+    // Fixture rows: multiple_choice(1), true_false(2), fill_blank, matching,
+    // image_hotspot. Only the first two are editable in Step 02.
+    const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
+    expect(editLinks.map((link) => link.getAttribute("href")).sort()).toEqual([
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/2`,
+    ]);
   });
 
   it("shows no create or edit actions without edit_content", async () => {
     renderBrowser();
     await screen.findByText("(önizleme yok)");
     expect(
-      screen.queryByRole("link", { name: "Yeni çoktan seçmeli soru" }),
+      screen.queryByRole("link", { name: "Yeni çoktan seçmeli" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Yeni doğru / yanlış" }),
     ).toBeNull();
     expect(screen.queryByRole("link", { name: "Düzenle" })).toBeNull();
   });

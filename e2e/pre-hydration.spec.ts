@@ -83,10 +83,13 @@ test.describe("native exercise editor submit", () => {
     "topicId",
     "difficulty",
     "scopes",
+    "statement",
+    "answerValue",
   ];
   const STEM = "Pre hydration sizinti sorusu";
   const OPTION_TEXT = "Pre hydration sik metni";
   const EXPLANATION = "Pre hydration aciklamasi";
+  const STATEMENT = "Pre hydration sizinti ifadesi";
 
   async function signIn(page: Page) {
     await page.goto("/login");
@@ -96,9 +99,31 @@ test.describe("native exercise editor submit", () => {
     await expect(page).toHaveURL(`${E2E_BASE_URL}/`);
   }
 
-  function expectNoLeak(url: string) {
-    expect(new URL(url).search).toBe("");
-    for (const secret of [...LEAKY_KEYS, STEM, OPTION_TEXT, EXPLANATION]) {
+  /**
+   * `allowedSearch` is the route's own non-sensitive metadata, and nothing
+   * else may appear: the create route carries the editor type as a safe enum,
+   * so the assertion is an exact allowlist rather than a vague "the answer
+   * isn't in there".
+   */
+  function expectNoLeak(
+    url: string,
+    allowedSearch: Record<string, string> = {},
+  ) {
+    const parsed = new URL(url);
+    expect(Object.fromEntries(parsed.searchParams)).toEqual(allowedSearch);
+    expect(parsed.search).toBe(
+      new URLSearchParams(allowedSearch).size === 0
+        ? ""
+        : `?${new URLSearchParams(allowedSearch).toString()}`,
+    );
+
+    for (const secret of [
+      ...LEAKY_KEYS,
+      STEM,
+      OPTION_TEXT,
+      EXPLANATION,
+      STATEMENT,
+    ]) {
       expect(url).not.toContain(secret);
       expect(url).not.toContain(encodeURIComponent(secret));
     }
@@ -185,5 +210,46 @@ test.describe("native exercise editor submit", () => {
     // is fine. Only the absence of a query-string leak matters.
     await page.waitForLoadState("load").catch(() => undefined);
     expectNoLeak(page.url());
+  });
+
+  test("native submit on the true/false route keeps only the safe type query", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`${NEW_PATH}?type=true_false`);
+
+    await page.getByLabel("Konu").selectOption("1");
+    await page.getByLabel("İfade").fill(STATEMENT);
+    await page.getByLabel("Yanlış").check();
+    await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+    const form = page
+      .locator("form")
+      .filter({ has: page.locator("#statement") });
+    await expect(form).toHaveAttribute("method", "post");
+
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (candidate) =>
+          candidate.isNavigationRequest() &&
+          candidate.url().includes("/exercises"),
+      ),
+      page.evaluate(() => {
+        const target = document.querySelector("#statement")?.closest("form");
+        if (target === null || target === undefined) {
+          throw new Error("editor form not found");
+        }
+        HTMLFormElement.prototype.submit.call(target);
+      }),
+    ]);
+
+    expect(request.method()).not.toBe("GET");
+    expect(request.method()).toBe("POST");
+    // type=true_false is routing metadata and may stay; the statement, the
+    // answer and every other field may not.
+    expectNoLeak(request.url(), { type: "true_false" });
+
+    await page.waitForLoadState("load").catch(() => undefined);
+    expectNoLeak(page.url(), { type: "true_false" });
   });
 });

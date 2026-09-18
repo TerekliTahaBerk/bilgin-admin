@@ -17,6 +17,7 @@ import {
   validCreateExerciseResponse,
   validExerciseDetailResponse,
   validTopicsResponse,
+  validTrueFalseDetailResponse,
   validUpdateExerciseResponse,
 } from "@/test/fixtures/exercise-editor-api";
 import { mswServer } from "@/test/integration/msw-server";
@@ -346,5 +347,258 @@ describe("PATCH /api/admin/exercises/[exerciseId]", () => {
     );
     expect(unauthorized.status).toBe(401);
     expect(setCookieHeader(unauthorized)).toContain("Max-Age=0");
+  });
+});
+
+const trueFalseEditable = {
+  type: "true_false",
+  topic_id: 1,
+  difficulty: 3,
+  content: { statement: "Uygurlar yerleşik hayata geçmiştir." },
+  answer_key: { value: false },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+describe("true/false mutations through the real BFF chain", () => {
+  it("creates with the exact backend body, keeping the answer a JSON boolean false", async () => {
+    const seal = await issueSession();
+    let raw = "";
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        raw = await request.text();
+        body = JSON.parse(raw);
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...trueFalseEditable,
+          owner_unit_id: 12,
+          // Mass-assignment attempts the browser must never get forwarded.
+          id: 77,
+          status: "published",
+          version: 9,
+          stats: { attempts: 5 },
+          owner_course_id: 3,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...trueFalseEditable, owner_unit_id: 12 });
+    // The wire format itself, not just the parsed object.
+    expect(raw).toContain('"value":false');
+    expect(raw).not.toContain('"false"');
+    expect(body).not.toHaveProperty("id");
+    expect(body).not.toHaveProperty("status");
+    expect(body).not.toHaveProperty("version");
+    expect(body).not.toHaveProperty("stats");
+    expect(body).not.toHaveProperty("owner_course_id");
+  });
+
+  it("updates without forwarding ownership, status or version and returns the warning", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    let raw = "";
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        raw = await request.text();
+        body = JSON.parse(raw);
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/2", seal, "PATCH", {
+        ...trueFalseEditable,
+        answer_key: { value: true },
+        owner_unit_id: 999,
+        status: "archived",
+        version: 3,
+        id: 2,
+      }),
+      { params: Promise.resolve({ exerciseId: "2" }) },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ ...trueFalseEditable, answer_key: { value: true } });
+    expect(raw).toContain('"value":true');
+    expect(body).not.toHaveProperty("owner_unit_id");
+    expect(body).not.toHaveProperty("status");
+    expect(body).not.toHaveProperty("version");
+    expect(body).not.toHaveProperty("id");
+    expect(payload.data.version).toBe(4);
+    expect(payload.data.answer_key_changed).toBe(true);
+    expect(payload.data.warning).toContain("Cevap anahtarı değişti");
+  });
+
+  it.each([
+    ['string "false"', "false"],
+    ['string "true"', "true"],
+    ["number 1", 1],
+    ["number 0", 0],
+    ["null", null],
+  ])(
+    "rejects a %s answer with 400 and zero backend calls",
+    async (_label, value) => {
+      const seal = await issueSession();
+      const seen = vi.fn();
+      mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+      const created = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          seal,
+          "POST",
+          { ...trueFalseEditable, answer_key: { value }, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+      const updated = await update(
+        mutationRequest("/api/admin/exercises/2", seal, "PATCH", {
+          ...trueFalseEditable,
+          answer_key: { value },
+        }),
+        { params: Promise.resolve({ exerciseId: "2" }) },
+      );
+
+      expect(created.status).toBe(400);
+      expect(updated.status).toBe(400);
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([["fill_blank"], ["matching"], ["banana"]])(
+    "rejects the unsupported mutation type %s with 400 and zero backend calls",
+    async (type) => {
+      const seal = await issueSession();
+      const seen = vi.fn();
+      mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+      const created = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          seal,
+          "POST",
+          { ...trueFalseEditable, type, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+      const updated = await update(
+        mutationRequest("/api/admin/exercises/2", seal, "PATCH", {
+          ...trueFalseEditable,
+          type,
+        }),
+        { params: Promise.resolve({ exerciseId: "2" }) },
+      );
+
+      expect(created.status).toBe(400);
+      expect(updated.status).toBe(400);
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a true/false body carrying multiple choice content", async () => {
+    const seal = await issueSession();
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen));
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...trueFalseEditable,
+          content: { stem: "Soru?", options: [{ id: "a", text: "A" }] },
+          answer_key: { correct_option_id: "a" },
+          owner_unit_id: 12,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("blocks a true/false mutation for edit_content=false before the backend", async () => {
+    const seal = await issueSession(contentReviewerFixture);
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+    const created = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...trueFalseEditable, owner_unit_id: 12 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+    const updated = await update(
+      mutationRequest(
+        "/api/admin/exercises/2",
+        seal,
+        "PATCH",
+        trueFalseEditable,
+      ),
+      { params: Promise.resolve({ exerciseId: "2" }) },
+    );
+
+    expect(created.status).toBe(403);
+    expect(updated.status).toBe(403);
+    expect(seen).not.toHaveBeenCalled();
+    expect(setCookieHeader(created)).toBeUndefined();
+  });
+
+  it("rejects a missing Origin on a true/false create with zero backend calls", async () => {
+    const seal = await issueSession();
+    const seen = vi.fn();
+    mswServer.use(http.post(CREATE_URL, seen));
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...trueFalseEditable, owner_unit_id: 12 },
+        {},
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("reads a stored true/false detail including its false answer key", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json(validTrueFalseDetailResponse),
+      ),
+    );
+
+    const response = await detail(
+      resourceRequest("/api/admin/exercises/2", seal),
+      { params: Promise.resolve({ exerciseId: "2" }) },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data.type).toBe("true_false");
+    expect(payload.data.answer_key).toEqual({ value: false });
+    expect(payload.data.content.statement).toBe(
+      validTrueFalseDetailResponse.data.content.statement,
+    );
   });
 });

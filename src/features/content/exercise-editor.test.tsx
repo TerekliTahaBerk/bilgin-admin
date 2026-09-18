@@ -370,7 +370,13 @@ describe("multiple choice edit editor", () => {
   });
 
   it("renders a safe unsupported-type state without a mutation form", async () => {
-    getExerciseDetail.mockResolvedValue({ ...detail, type: "true_false" });
+    // fill_blank is Step 03; it stays readable but not editable.
+    getExerciseDetail.mockResolvedValue({
+      ...detail,
+      type: "fill_blank",
+      content: { segments: [{ kind: "text", value: "x" }] },
+      answer_key: { blanks: ["x"] },
+    });
     renderEditor(101);
     expect(
       await screen.findByRole("heading", {

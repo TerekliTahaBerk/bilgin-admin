@@ -49,6 +49,34 @@ export const multipleChoiceAnswerKeySchema = z.object({
     .transform(String),
 });
 
+export const trueFalseContentSchema = z.object({
+  statement: z.string(),
+});
+
+/**
+ * The backend's TrueFalseValidator rejects anything that is not a real boolean
+ * — "true", "false", 1 and 0 all fail there, because the grader compares
+ * strictly. Mirroring that with z.boolean() (never z.coerce.boolean()) keeps a
+ * tampered browser body from reaching the backend at all.
+ */
+export const trueFalseAnswerKeySchema = z.object({
+  value: z.boolean(),
+});
+
+/** The exercise types this editor is allowed to create and update. */
+export const supportedEditorTypeSchema = z.enum([
+  "multiple_choice",
+  "true_false",
+]);
+
+export type SupportedEditorType = z.infer<typeof supportedEditorTypeSchema>;
+
+export function isSupportedEditorType(
+  type: string,
+): type is SupportedEditorType {
+  return supportedEditorTypeSchema.safeParse(type).success;
+}
+
 const exerciseDetailDataBaseSchema = z.object({
   id: positiveIdSchema,
   type: exerciseTypeSchema,
@@ -63,31 +91,43 @@ const exerciseDetailDataBaseSchema = z.object({
   stats: exerciseStatsSchema,
 });
 
+const detailShapeByType = {
+  multiple_choice: {
+    content: multipleChoiceContentSchema,
+    answerKey: multipleChoiceAnswerKeySchema,
+    label: "Çoktan seçmeli",
+  },
+  true_false: {
+    content: trueFalseContentSchema,
+    answerKey: trueFalseAnswerKeySchema,
+    label: "Doğru / yanlış",
+  },
+} as const;
+
 /**
- * All ten exercise types are readable, but Step 01 only edits multiple choice.
- * The conditional refinement keeps unsupported types inspectable while fully
- * validating the one type this editor is allowed to mutate.
+ * All ten exercise types stay readable — an unsupported type must not become
+ * an unreadable one — but the two types this editor can mutate are fully
+ * validated, so the form never hydrates from a shape it cannot serialize back.
  */
 export const exerciseDetailDataSchema =
   exerciseDetailDataBaseSchema.superRefine((value, context) => {
-    if (value.type !== "multiple_choice") return;
+    if (!isSupportedEditorType(value.type)) return;
 
-    const content = multipleChoiceContentSchema.safeParse(value.content);
-    const answerKey = multipleChoiceAnswerKeySchema.safeParse(value.answer_key);
+    const shape = detailShapeByType[value.type];
 
-    if (!content.success) {
+    if (!shape.content.safeParse(value.content).success) {
       context.addIssue({
         code: "custom",
         path: ["content"],
-        message: "Çoktan seçmeli soru içeriği geçersiz.",
+        message: `${shape.label} soru içeriği geçersiz.`,
       });
     }
 
-    if (!answerKey.success) {
+    if (!shape.answerKey.safeParse(value.answer_key).success) {
       context.addIssue({
         code: "custom",
         path: ["answer_key"],
-        message: "Çoktan seçmeli cevap anahtarı geçersiz.",
+        message: `${shape.label} cevap anahtarı geçersiz.`,
       });
     }
   });
@@ -96,21 +136,44 @@ export const exerciseDetailResponseSchema = successEnvelopeSchema(
   exerciseDetailDataSchema,
 );
 
-const editableExerciseFieldsSchema = z.object({
-  type: z.literal("multiple_choice"),
+const commonEditableFields = {
   topic_id: positiveIdSchema,
   difficulty: z.number().int().min(1).max(5),
-  content: multipleChoiceContentSchema,
-  answer_key: multipleChoiceAnswerKeySchema,
   explanation: z.string().max(2000).nullable(),
   applicable_scopes: z.array(courseScopeSchema).min(1),
+} as const;
+
+export const multipleChoiceEditableSchema = z.object({
+  type: z.literal("multiple_choice"),
+  ...commonEditableFields,
+  content: multipleChoiceContentSchema,
+  answer_key: multipleChoiceAnswerKeySchema,
 });
 
-export const createExerciseRequestSchema = editableExerciseFieldsSchema.extend({
-  owner_unit_id: positiveIdSchema,
+export const trueFalseEditableSchema = z.object({
+  type: z.literal("true_false"),
+  ...commonEditableFields,
+  content: trueFalseContentSchema,
+  answer_key: trueFalseAnswerKeySchema,
 });
 
-export const updateExerciseRequestSchema = editableExerciseFieldsSchema;
+/**
+ * Mutations accept exactly the supported editor union. The other eight types
+ * fall through the discriminator and are rejected before any backend call, and
+ * the object schemas strip id/status/version/stats/owner_course_id — plus
+ * owner_unit_id on update — so a crafted browser body cannot mass-assign them.
+ */
+export const editableExerciseSchema = z.discriminatedUnion("type", [
+  multipleChoiceEditableSchema,
+  trueFalseEditableSchema,
+]);
+
+export const createExerciseRequestSchema = z.discriminatedUnion("type", [
+  multipleChoiceEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  trueFalseEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+]);
+
+export const updateExerciseRequestSchema = editableExerciseSchema;
 
 export const createExerciseResponseSchema = successEnvelopeSchema(
   z.object({
@@ -132,6 +195,8 @@ export type CourseTopic = z.infer<typeof courseTopicSchema>;
 export type CourseTopicsData = z.infer<typeof courseTopicsDataSchema>;
 export type CourseTopicsResponse = z.infer<typeof courseTopicsResponseSchema>;
 export type MultipleChoiceContent = z.infer<typeof multipleChoiceContentSchema>;
+export type TrueFalseContent = z.infer<typeof trueFalseContentSchema>;
+export type EditableExercise = z.infer<typeof editableExerciseSchema>;
 export type ExerciseDetail = z.infer<typeof exerciseDetailDataSchema>;
 export type ExerciseDetailResponse = z.infer<
   typeof exerciseDetailResponseSchema

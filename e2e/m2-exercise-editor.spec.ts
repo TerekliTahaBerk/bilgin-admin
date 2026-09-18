@@ -34,7 +34,7 @@ test("creates a real multiple-choice draft and enters edit mode", async ({
 }) => {
   await signIn(page);
   await page.goto(LIST_PATH);
-  await page.getByRole("link", { name: "Yeni çoktan seçmeli soru" }).click();
+  await page.getByRole("link", { name: "Yeni çoktan seçmeli" }).click();
   await expect(page).toHaveURL(`${E2E_BASE_URL}${NEW_PATH}`);
 
   await fillQuestion(page, "E2E yeni çoktan seçmeli soru");
@@ -93,7 +93,7 @@ test("reviewer can read the list but cannot see or open editor actions", async (
     page.getByText("Uygurlar yerleşik hayata geçen ilk Türk devletidir."),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Yeni çoktan seçmeli soru" }),
+    page.getByRole("link", { name: "Yeni çoktan seçmeli" }),
   ).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(0);
 

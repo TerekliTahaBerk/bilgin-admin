@@ -21,6 +21,8 @@ import {
   coursesQueryOptions,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
+import { isSupportedEditorType } from "@/contracts/admin/exercise-editor";
+import { createExercisePath } from "@/features/content/exercise-editor";
 import { ExerciseFilterBar } from "@/features/content/exercise-filter-bar";
 import type { ExerciseFilterValues } from "@/features/content/exercise-filter-bar";
 import {
@@ -117,7 +119,7 @@ function ExerciseRow({
       </div>
 
       <StatsLine exercise={exercise} />
-      {canEdit && exercise.type === "multiple_choice" ? (
+      {canEdit && isSupportedEditorType(exercise.type) ? (
         <div>
           <Link
             className="text-xs font-semibold text-primary hover:underline"
@@ -324,12 +326,20 @@ export function ExercisesBrowser({
         title={unitTitle}
       />
       {canEdit ? (
-        <Link
-          className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white sm:absolute sm:bottom-5 sm:right-0 sm:mt-0"
-          href={`/courses/${courseId}/units/${unitId}/exercises/new`}
-        >
-          Yeni çoktan seçmeli soru
-        </Link>
+        <div className="mt-4 flex flex-wrap gap-2 sm:absolute sm:bottom-5 sm:right-0 sm:mt-0">
+          <Link
+            className="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white"
+            href={createExercisePath(courseId, unitId, "multiple_choice")}
+          >
+            Yeni çoktan seçmeli
+          </Link>
+          <Link
+            className="inline-flex rounded-md border border-border bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-muted"
+            href={createExercisePath(courseId, unitId, "true_false")}
+          >
+            Yeni doğru / yanlış
+          </Link>
+        </div>
       ) : null}
     </div>
   );

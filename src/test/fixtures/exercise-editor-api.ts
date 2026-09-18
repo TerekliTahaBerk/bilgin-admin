@@ -50,6 +50,31 @@ export const validExerciseDetailResponse = {
   meta: { server_time: "2026-09-18T10:00:00+00:00" },
 };
 
+/** A stored true/false question whose answer is the falsy boolean `false`. */
+export const validTrueFalseDetailResponse = {
+  data: {
+    id: 2,
+    type: "true_false",
+    topic_id: 1,
+    difficulty: 4,
+    content: {
+      statement: "Uygurlar yerleşik hayata geçen ilk Türk devletidir.",
+    },
+    answer_key: { value: false },
+    explanation: "Yerleşik hayata geçen ilk Türk devleti Uygurlardır.",
+    applicable_scopes: ["tyt"],
+    status: "published",
+    version: 2,
+    stats: {
+      attempts: 12,
+      correct_rate: 40,
+      avg_seconds: 9,
+      needs_review: true,
+    },
+  },
+  meta: { server_time: "2026-09-18T10:00:00+00:00" },
+};
+
 export const validCreateExerciseResponse = {
   data: { id: 123, status: "draft" },
   meta: { server_time: "2026-09-18T10:00:00+00:00" },
