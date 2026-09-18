@@ -119,6 +119,101 @@ const UNITS = {
   4: [],
 };
 
+/** Exercises per unit id, covering types, statuses, difficulties and stats. */
+const EXERCISES = {
+  11: [
+    {
+      id: 101,
+      type: "multiple_choice",
+      topic: { id: 1, name: "İlk Türk Devletleri" },
+      difficulty: 1,
+      status: "published",
+      version: 1,
+      scopes: ["tyt", "ayt"],
+      preview: "Orhun Yazıtları hangi Türk devletine aittir?",
+      stats: {
+        attempts: 0,
+        correct_rate: null,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    },
+    {
+      id: 102,
+      type: "true_false",
+      topic: { id: 1, name: "İlk Türk Devletleri" },
+      difficulty: 3,
+      status: "draft",
+      version: 2,
+      scopes: ["tyt"],
+      preview: "Uygurlar yerleşik hayata geçen ilk Türk devletidir.",
+      stats: {
+        attempts: 41,
+        correct_rate: 97,
+        avg_seconds: 7,
+        needs_review: true,
+      },
+    },
+    {
+      id: 103,
+      type: "fill_blank",
+      topic: { id: 2, name: "Kültür ve Medeniyet" },
+      difficulty: 3,
+      status: "review",
+      version: 1,
+      scopes: ["tyt", "ayt"],
+      preview: "Yazısız hukuk kurallarına {{0}} denir.",
+      stats: {
+        attempts: 15,
+        correct_rate: 60,
+        avg_seconds: 23,
+        needs_review: false,
+      },
+    },
+    {
+      id: 104,
+      type: "matching",
+      topic: { id: 2, name: "Kültür ve Medeniyet" },
+      difficulty: 5,
+      status: "archived",
+      version: 1,
+      scopes: ["ayt"],
+      preview: "Kavramı karşılığıyla birleştir.",
+      stats: {
+        attempts: 22,
+        correct_rate: 9,
+        avg_seconds: 51,
+        needs_review: true,
+      },
+    },
+    {
+      id: 105,
+      type: "image_hotspot",
+      topic: { id: 2, name: "Kültür ve Medeniyet" },
+      difficulty: 1,
+      status: "published",
+      version: 1,
+      scopes: ["tyt"],
+      preview: "(önizleme yok)",
+      stats: {
+        attempts: 4,
+        correct_rate: 25,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    },
+  ],
+  12: [],
+  13: [],
+  31: [],
+};
+
+const UNIT_TITLES = Object.fromEntries(
+  Object.values(UNITS)
+    .flat()
+    .map((unit) => [unit.id, unit.title]),
+);
+
 function send(response, status, body) {
   const payload = body === null ? "" : JSON.stringify(body);
 
@@ -206,6 +301,44 @@ const server = createServer(async (request, response) => {
     }
 
     send(response, 200, envelope(units));
+    return;
+  }
+
+  const exercisesMatch = /^\/api\/admin\/v1\/units\/(\d+)\/exercises$/.exec(
+    url.pathname,
+  );
+
+  if (request.method === "GET" && exercisesMatch !== null) {
+    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+
+    const unitId = Number(exercisesMatch[1]);
+    const all = EXERCISES[unitId];
+
+    if (all === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+
+    // Only type and status are server-applied, exactly like the real backend.
+    const type = url.searchParams.get("type");
+    const status = url.searchParams.get("status");
+    const exercises = all.filter(
+      (exercise) =>
+        (type === null || exercise.type === type) &&
+        (status === null || exercise.status === status),
+    );
+
+    send(
+      response,
+      200,
+      envelope({
+        unit: { id: unitId, title: UNIT_TITLES[unitId] ?? "Ünite" },
+        exercises,
+      }),
+    );
     return;
   }
 

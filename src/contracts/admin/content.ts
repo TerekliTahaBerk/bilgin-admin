@@ -63,6 +63,65 @@ export const unitSchema = z.object({
 
 export const unitsResponseSchema = successEnvelopeSchema(z.array(unitSchema));
 
+/** Mirrors the backend `ExerciseType` enum — all ten types, list-readable. */
+export const exerciseTypes = [
+  "multiple_choice",
+  "fill_blank",
+  "matching",
+  "ordering",
+  "flashcard",
+  "true_false",
+  "word_order",
+  "numeric_input",
+  "image_hotspot",
+  "diagram_label",
+] as const;
+
+export const exerciseTypeSchema = z.enum(exerciseTypes);
+
+export const exerciseTopicSchema = z.object({
+  id: z.number().int().positive(),
+  name: nonEmptyStringSchema,
+});
+
+/**
+ * `correct_rate` is null until the exercise has been attempted; the backend
+ * only computes it when attempts > 0. Null is "not solved yet", never zero.
+ */
+export const exerciseStatsSchema = z.object({
+  attempts: z.number().int().nonnegative(),
+  correct_rate: z.number().int().min(0).max(100).nullable(),
+  avg_seconds: z.number().int().nonnegative().nullable(),
+  needs_review: z.boolean(),
+});
+
+export const exerciseListItemSchema = z.object({
+  id: z.number().int().positive(),
+  type: exerciseTypeSchema,
+  topic: exerciseTopicSchema,
+  difficulty: z.number().int().min(1).max(5),
+  status: publishStatusSchema,
+  version: z.number().int().positive(),
+  scopes: z.array(courseScopeSchema),
+  // Backend-produced short text (up to 90 chars, sometimes "(önizleme yok)").
+  // Rendered as plain text; the frontend never rebuilds it from content.
+  preview: z.string(),
+});
+
+export const unitExercisesDataSchema = z.object({
+  unit: z.object({
+    id: z.number().int().positive(),
+    title: nonEmptyStringSchema,
+  }),
+  exercises: z.array(
+    exerciseListItemSchema.extend({ stats: exerciseStatsSchema }),
+  ),
+});
+
+export const unitExercisesResponseSchema = successEnvelopeSchema(
+  unitExercisesDataSchema,
+);
+
 export type CourseScope = z.infer<typeof courseScopeSchema>;
 export type PublishStatus = z.infer<typeof publishStatusSchema>;
 export type AccessLevel = z.infer<typeof accessLevelSchema>;
@@ -70,3 +129,11 @@ export type Course = z.infer<typeof courseSchema>;
 export type CoursesResponse = z.infer<typeof coursesResponseSchema>;
 export type Unit = z.infer<typeof unitSchema>;
 export type UnitsResponse = z.infer<typeof unitsResponseSchema>;
+export type ExerciseType = z.infer<typeof exerciseTypeSchema>;
+export type ExerciseTopic = z.infer<typeof exerciseTopicSchema>;
+export type ExerciseStats = z.infer<typeof exerciseStatsSchema>;
+export type ExerciseListItem = z.infer<
+  typeof unitExercisesDataSchema
+>["exercises"][number];
+export type UnitExercisesData = z.infer<typeof unitExercisesDataSchema>;
+export type UnitExercisesResponse = z.infer<typeof unitExercisesResponseSchema>;

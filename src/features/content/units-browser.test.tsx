@@ -250,25 +250,47 @@ describe("UnitsBrowser has no write or next-step actions yet", () => {
     }
   });
 
-  it("renders unit rows that are neither links nor buttons", async () => {
+  it("links each unit row to its exercise list without nesting a button", async () => {
     const { container } = renderBrowser();
 
     await screen.findByText("Tarih ve Zaman");
 
-    for (const item of container.querySelectorAll("li")) {
-      expect(item.querySelector("a")).toBeNull();
-      expect(item.querySelector("button")).toBeNull();
+    const rows = [...container.querySelectorAll("li")];
+
+    expect(rows).toHaveLength(units.length);
+    for (const [index, row] of rows.entries()) {
+      const link = row.querySelector("a");
+
+      expect(link?.getAttribute("href")).toBe(
+        `/courses/${COURSE_ID}/units/${units[index]!.id}`,
+      );
+      expect(row.querySelector("button")).toBeNull();
     }
   });
 
-  it("links only back to the course list", async () => {
+  it("gives each row link an accessible name carrying the unit title", async () => {
+    renderBrowser();
+
+    await screen.findByText("Tarih ve Zaman");
+
+    const link = screen.getByRole("link", { name: /Tarih ve Zaman/ });
+
+    expect(link.getAttribute("href")).toBe(
+      `/courses/${COURSE_ID}/units/${units[1]!.id}`,
+    );
+  });
+
+  it("links back to the course list and to each unit, nothing else", async () => {
     renderBrowser();
 
     await screen.findByText("Tarih ve Zaman");
 
     expect(
       screen.getAllByRole("link").map((link) => link.getAttribute("href")),
-    ).toEqual(["/courses"]);
+    ).toEqual([
+      "/courses",
+      ...units.map((unit) => `/courses/${COURSE_ID}/units/${unit.id}`),
+    ]);
   });
 });
 

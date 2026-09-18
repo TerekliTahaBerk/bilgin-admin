@@ -112,3 +112,45 @@ export function sealExpiredSession(): Promise<string> {
     { password: E2E_SESSION_SECRET, ttl: 0 },
   );
 }
+
+/** Mirrors the EXERCISES fixture served by e2e/support/mock-backend.mjs. */
+export const E2E_UNIT_WITH_EXERCISES_ID = 11;
+export const E2E_UNIT_WITHOUT_EXERCISES_ID = 12;
+export const E2E_MISSING_UNIT_ID = 999999;
+export const E2E_EXERCISES = [
+  {
+    preview: "Orhun Yazıtları hangi Türk devletine aittir?",
+    type: "Çoktan Seçmeli",
+    topic: "İlk Türk Devletleri",
+    status: "Yayında",
+    needsReview: false,
+  },
+  {
+    preview: "Uygurlar yerleşik hayata geçen ilk Türk devletidir.",
+    type: "Doğru / Yanlış",
+    topic: "İlk Türk Devletleri",
+    status: "Taslak",
+    needsReview: true,
+  },
+  {
+    preview: "Yazısız hukuk kurallarına {{0}} denir.",
+    type: "Boşluk Doldurma",
+    topic: "Kültür ve Medeniyet",
+    status: "İncelemede",
+    needsReview: false,
+  },
+  {
+    preview: "Kavramı karşılığıyla birleştir.",
+    type: "Eşleştirme",
+    topic: "Kültür ve Medeniyet",
+    status: "Arşiv",
+    needsReview: true,
+  },
+  {
+    preview: "(önizleme yok)",
+    type: "Görsel Bölge",
+    topic: "Kültür ve Medeniyet",
+    status: "Yayında",
+    needsReview: false,
+  },
+] as const;

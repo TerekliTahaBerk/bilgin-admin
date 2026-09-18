@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminContent } from "@/lib/backend/admin-content";
 import {
   ADMIN_COURSES_TIMEOUT_MS,
+  ADMIN_EXERCISES_TIMEOUT_MS,
   ADMIN_UNITS_TIMEOUT_MS,
 } from "@/lib/backend/client";
 import {
   validCoursesResponse,
   validUnitsResponse,
 } from "@/test/fixtures/courses-api";
+import { validUnitExercisesResponse } from "@/test/fixtures/exercises-api";
 
 const BACKEND_TOKEN = "test-explicit-backend-token";
 
@@ -325,6 +327,175 @@ describe("adminContent.units responses", () => {
     const fetchMock = stubFetch(jsonResponse({ message: "nope" }, 500));
 
     await adminContent.units(1, BACKEND_TOKEN);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("adminContent.exercises request", () => {
+  it("builds the backend path from the numeric unit id", async () => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    const request = requestFrom(fetchMock);
+
+    expect(request.url).toBe(
+      "http://localhost:8000/api/admin/v1/units/12/exercises",
+    );
+    expect(request.init.method).toBe("GET");
+    expect(request.headers.get("authorization")).toBe(
+      `Bearer ${BACKEND_TOKEN}`,
+    );
+    expect(request.headers.get("accept")).toBe("application/json");
+    expect(request.init.cache).toBe("no-store");
+  });
+
+  it.each([
+    [{ type: "multiple_choice" }, "?type=multiple_choice"],
+    [{ status: "draft" }, "?status=draft"],
+    [
+      { type: "multiple_choice", status: "draft" },
+      "?type=multiple_choice&status=draft",
+    ],
+  ] as const)("encodes the filters %o exactly", async (filters, query) => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    await adminContent.exercises(12, filters, BACKEND_TOKEN);
+
+    expect(requestFrom(fetchMock).url).toBe(
+      `http://localhost:8000/api/admin/v1/units/12/exercises${query}`,
+    );
+  });
+
+  it("forwards no browser-controlled header to the backend", async () => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    const { headers } = requestFrom(fetchMock);
+
+    for (const header of [
+      "cookie",
+      "origin",
+      "host",
+      "referer",
+      "x-forwarded-for",
+      "x-real-ip",
+      "forwarded",
+      "connection",
+    ]) {
+      expect(headers.get(header)).toBeNull();
+    }
+    expect([...headers.keys()].sort()).toEqual(["accept", "authorization"]);
+  });
+
+  it("applies a ten second timeout signal", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    expect(ADMIN_EXERCISES_TIMEOUT_MS).toBe(10_000);
+    expect(timeoutSpy).toHaveBeenCalledWith(ADMIN_EXERCISES_TIMEOUT_MS);
+  });
+});
+
+describe("adminContent.exercises path and query safety", () => {
+  it.each([
+    ["zero", 0],
+    ["a negative id", -1],
+    ["a fractional id", 1.5],
+    ["a string id", "12" as unknown as number],
+    ["a traversal string", "12/../../me" as unknown as number],
+    ["a query string", "12?status=published" as unknown as number],
+    ["an unsafe integer", 999999999999999999999],
+  ])("refuses the unit id %s before any request", async (_label, unitId) => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    expect(() => adminContent.exercises(unitId, {}, BACKEND_TOKEN)).toThrow(
+      TypeError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an unknown type", { type: "banana" }],
+    ["an unknown status", { status: "banana" }],
+    ["a query fragment as a type", { type: "multiple_choice&topic=1" }],
+  ])("refuses %s before any request", async (_label, filters) => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    expect(() =>
+      adminContent.exercises(12, filters as never, BACKEND_TOKEN),
+    ).toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty backend token before making a request", async () => {
+    const fetchMock = stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    expect(() => adminContent.exercises(12, {}, "   ")).toThrow(TypeError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("adminContent.exercises responses", () => {
+  it("parses a valid payload against the contract", async () => {
+    stubFetch(jsonResponse(validUnitExercisesResponse));
+
+    const result = await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.data.data.exercises).toHaveLength(5);
+    expect(result.ok && result.data.data.unit.id).toBe(12);
+  });
+
+  it("returns a contract error for a payload that breaks the schema", async () => {
+    stubFetch(
+      jsonResponse({
+        data: {
+          unit: { id: 12, title: "x" },
+          exercises: [{ id: 1, type: "essay", difficulty: 9 }],
+        },
+        meta: { server_time: "2026-09-16T19:05:20+00:00" },
+      }),
+    );
+
+    const result = await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe("contract");
+  });
+
+  it.each([
+    [401, "authentication"],
+    [403, "authorization"],
+    [404, "not_found"],
+    [500, "server"],
+  ] as const)("maps a backend %i to a %s error", async (status, kind) => {
+    stubFetch(jsonResponse({ error: { code: "X", message: "y" } }, status));
+
+    const result = await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe(kind);
+  });
+
+  it("returns a network error with exactly one attempt", async () => {
+    const fetchMock = stubFetch(new TypeError("fetch failed"));
+
+    const result = await adminContent.exercises(12, {}, BACKEND_TOKEN);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe("network");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("issues exactly one request for an error response", async () => {
+    const fetchMock = stubFetch(jsonResponse({ message: "nope" }, 500));
+
+    await adminContent.exercises(12, {}, BACKEND_TOKEN);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

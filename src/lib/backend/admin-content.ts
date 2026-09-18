@@ -2,10 +2,16 @@ import "server-only";
 
 import {
   coursesResponseSchema,
+  unitExercisesResponseSchema,
   unitsResponseSchema,
   type CoursesResponse,
+  type UnitExercisesResponse,
   type UnitsResponse,
 } from "@/contracts/admin/content";
+import {
+  requireExerciseFilters,
+  type ExerciseServerFilters,
+} from "@/features/content/exercise-filters";
 import { requireResourceId } from "@/lib/api/resource-id";
 import {
   requestAdminBackend,
@@ -58,6 +64,28 @@ export const adminContent = Object.freeze({
         signal: options.signal,
       },
       unitsResponseSchema,
+    );
+  },
+
+  /**
+   * `filters` only ever carries the two parameters the backend applies, and
+   * each is re-validated while the query string is built.
+   */
+  exercises(
+    unitId: number,
+    filters: ExerciseServerFilters,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<UnitExercisesResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "exercises",
+        unitId: requireResourceId(unitId),
+        filters: requireExerciseFilters(filters),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      unitExercisesResponseSchema,
     );
   },
 });

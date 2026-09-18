@@ -1,5 +1,14 @@
-import type { Course, Unit } from "@/contracts/admin/content";
-import { getCourses, getCourseUnits } from "@/features/content/content-client";
+import type {
+  Course,
+  Unit,
+  UnitExercisesData,
+} from "@/contracts/admin/content";
+import {
+  getCourses,
+  getCourseUnits,
+  getUnitExercises,
+} from "@/features/content/content-client";
+import type { ExerciseServerFilters } from "@/features/content/exercise-filters";
 
 /**
  * Query keys and options live here so both browsers share one cache entry per
@@ -27,6 +36,40 @@ export function courseUnitsQueryOptions(courseId: number) {
     queryKey: courseUnitsQueryKey(courseId),
     queryFn: ({ signal }: { signal: AbortSignal }): Promise<Unit[]> =>
       getCourseUnits(courseId, { signal }),
+    staleTime: CONTENT_STALE_TIME_MS,
+  };
+}
+
+/**
+ * Only the server filters belong in the key. Topic and difficulty are applied
+ * to the loaded array, so including them would split the cache and trigger a
+ * needless refetch on every local filter change.
+ */
+export function unitExercisesQueryKey(
+  unitId: number,
+  filters: ExerciseServerFilters,
+) {
+  return [
+    "content",
+    "units",
+    unitId,
+    "exercises",
+    { type: filters.type ?? null, status: filters.status ?? null },
+  ] as const;
+}
+
+export function unitExercisesQueryOptions(
+  unitId: number,
+  filters: ExerciseServerFilters,
+) {
+  return {
+    queryKey: unitExercisesQueryKey(unitId, filters),
+    queryFn: ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<UnitExercisesData> =>
+      getUnitExercises(unitId, filters, { signal }),
     staleTime: CONTENT_STALE_TIME_MS,
   };
 }

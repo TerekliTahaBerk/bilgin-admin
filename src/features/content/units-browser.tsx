@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -67,34 +67,43 @@ function SummaryStrip({ units }: { units: readonly Unit[] }) {
   );
 }
 
-function UnitRow({ unit }: { unit: Unit }) {
+function UnitRow({ courseId, unit }: { courseId: number; unit: Unit }) {
   const grade = gradeLevelLabel(unit.grade_level);
 
   return (
-    // Not a link and not a button: the exercise list route does not exist yet.
-    <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{unit.title}</p>
-        <p className="truncate text-xs text-muted">
-          {grade === null ? null : <span>{grade} · </span>}
-          <span>{unit.node_count} adım</span>
-          <span>
-            {" · "}
-            {isAwaitingExercises(unit)
-              ? "Soru bekliyor"
-              : `${unit.exercise_count} soru`}
-          </span>
-        </p>
-      </div>
+    <li>
+      {/* The exercise list route exists now, so the whole row is a real link. */}
+      <Link
+        className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-surface-muted sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+        href={`/courses/${courseId}/units/${unit.id}`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{unit.title}</p>
+          <p className="truncate text-xs text-muted">
+            {grade === null ? null : <span>{grade} · </span>}
+            <span>{unit.node_count} adım</span>
+            <span>
+              {" · "}
+              {isAwaitingExercises(unit)
+                ? "Soru bekliyor"
+                : `${unit.exercise_count} soru`}
+            </span>
+          </p>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
-        <span className="inline-flex sm:w-24">
-          <StatusBadge status={unit.status} />
-        </span>
-        <span className="inline-flex sm:w-24 sm:justify-end">
-          <AccessBadge access={unit.access} />
-        </span>
-      </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
+          <span className="inline-flex sm:w-24">
+            <StatusBadge status={unit.status} />
+          </span>
+          <span className="inline-flex sm:w-24 sm:justify-end">
+            <AccessBadge access={unit.access} />
+          </span>
+          <ChevronRight
+            aria-hidden="true"
+            className="hidden size-4 shrink-0 text-muted sm:block"
+          />
+        </div>
+      </Link>
     </li>
   );
 }
@@ -295,7 +304,7 @@ export function UnitsBrowser({ courseId }: { courseId: number }) {
         <SummaryStrip units={unitsQuery.data} />
         <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
           {unitsQuery.data.map((unit) => (
-            <UnitRow key={unit.id} unit={unit} />
+            <UnitRow courseId={courseId} key={unit.id} unit={unit} />
           ))}
         </ul>
       </div>
