@@ -2,8 +2,11 @@ import "server-only";
 
 import {
   coursesResponseSchema,
+  unitsResponseSchema,
   type CoursesResponse,
+  type UnitsResponse,
 } from "@/contracts/admin/content";
+import { requireResourceId } from "@/lib/api/resource-id";
 import {
   requestAdminBackend,
   type BackendRequestOptions,
@@ -35,6 +38,26 @@ export const adminContent = Object.freeze({
         signal: options.signal,
       },
       coursesResponseSchema,
+    );
+  },
+
+  /**
+   * `courseId` is validated here and again while the path is built. A caller
+   * cannot pass a path, only an id — there is no get(path) operation.
+   */
+  units(
+    courseId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<UnitsResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "units",
+        courseId: requireResourceId(courseId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      unitsResponseSchema,
     );
   },
 });

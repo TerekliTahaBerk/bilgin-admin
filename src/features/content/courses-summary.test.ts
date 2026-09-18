@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { coursesResponseSchema, type Course } from "@/contracts/admin/content";
+import { publishStatusLabels } from "@/features/content/content-labels";
 import {
   groupCoursesByScope,
   isAwaitingContent,
-  publishStatusLabels,
   summarizeCourses,
 } from "@/features/content/courses-summary";
 import { validCoursesResponse } from "@/test/fixtures/courses-api";

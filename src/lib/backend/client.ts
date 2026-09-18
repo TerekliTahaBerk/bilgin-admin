@@ -10,11 +10,13 @@ import {
 } from "@/lib/api/error";
 import { normalizeHttpError } from "@/lib/api/normalize-error";
 import { parseContract } from "@/lib/api/parse-contract";
+import { requireResourceId } from "@/lib/api/resource-id";
 import { serverEnv } from "@/lib/env/server";
 
 export const ADMIN_LOGIN_TIMEOUT_MS = 15_000;
 export const ADMIN_ME_TIMEOUT_MS = 10_000;
 export const ADMIN_COURSES_TIMEOUT_MS = 10_000;
+export const ADMIN_UNITS_TIMEOUT_MS = 10_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -31,6 +33,14 @@ const ADMIN_BACKEND_ENDPOINTS = {
     method: "GET",
     path: "/api/admin/v1/courses",
     timeoutMs: ADMIN_COURSES_TIMEOUT_MS,
+  },
+  units: {
+    method: "GET",
+    // The only dynamic segment in the registry. It is produced here, from a
+    // number the caller has already had validated — callers cannot supply a
+    // path of their own.
+    path: (courseId: number) => `/api/admin/v1/courses/${courseId}/units`,
+    timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
   },
 } as const;
 
@@ -49,6 +59,12 @@ type AdminBackendRequest =
     }>
   | Readonly<{
       operation: "me" | "courses";
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "units";
+      courseId: number;
       backendToken: string;
       signal?: AbortSignal;
     }>;
@@ -92,6 +108,17 @@ function createRequestSignal(
     : timeoutSignal;
 }
 
+function endpointPath(request: AdminBackendRequest): string {
+  if (request.operation === "units") {
+    // Validated again here: the path is built from a number, never a string.
+    return ADMIN_BACKEND_ENDPOINTS.units.path(
+      requireResourceId(request.courseId),
+    );
+  }
+
+  return ADMIN_BACKEND_ENDPOINTS[request.operation].path;
+}
+
 function createBackendRequest(request: AdminBackendRequest): {
   url: URL;
   init: RequestInit;
@@ -113,7 +140,7 @@ function createBackendRequest(request: AdminBackendRequest): {
   }
 
   return {
-    url: new URL(endpoint.path, serverEnv.BILGIN_API_URL),
+    url: new URL(endpointPath(request), serverEnv.BILGIN_API_URL),
     init,
   };
 }

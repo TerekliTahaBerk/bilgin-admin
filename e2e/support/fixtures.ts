@@ -47,6 +47,37 @@ export const E2E_COURSES = [
     unitCount: 0,
   },
 ] as const;
+
+/** Mirrors the UNITS fixture served by e2e/support/mock-backend.mjs. */
+export const E2E_COURSE_WITH_UNITS_ID = 1;
+export const E2E_COURSE_WITHOUT_UNITS_ID = 2;
+export const E2E_MISSING_COURSE_ID = 999999;
+export const E2E_UNITS = [
+  {
+    title: "İlk ve Orta Çağlarda Türk Dünyası",
+    grade: "9. sınıf",
+    status: "Yayında",
+    access: "Ücretsiz",
+    nodes: "6 adım",
+    exercises: "44 soru",
+  },
+  {
+    title: "Tarih ve Zaman",
+    grade: "12. sınıf",
+    status: "İncelemede",
+    access: "Premium",
+    nodes: "4 adım",
+    exercises: "12 soru",
+  },
+  {
+    title: "Hazırlanıyor",
+    grade: null,
+    status: "Taslak",
+    access: "Ücretsiz",
+    nodes: "0 adım",
+    exercises: "Soru bekliyor",
+  },
+] as const;
 export const E2E_ADMIN_ROLE_LABEL = "İçerik Editörü";
 
 /**

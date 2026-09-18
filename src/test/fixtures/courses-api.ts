@@ -45,3 +45,48 @@ export const emptyCoursesResponse = {
   data: [],
   meta: { server_time: "2026-09-16T19:05:20+00:00" },
 };
+
+/**
+ * Representative `/api/admin/v1/courses/{course}/units` payload: several
+ * statuses and access levels, a null grade_level and a unit with no exercises.
+ */
+export const validUnitsResponse = {
+  data: [
+    {
+      id: 1,
+      title: "İlk ve Orta Çağlarda Türk Dünyası",
+      sort_order: 1,
+      grade_level: 9,
+      status: "published",
+      access: "free",
+      node_count: 6,
+      exercise_count: 44,
+    },
+    {
+      id: 2,
+      title: "Tarih ve Zaman",
+      sort_order: 2,
+      grade_level: 12,
+      status: "review",
+      access: "premium",
+      node_count: 4,
+      exercise_count: 12,
+    },
+    {
+      id: 3,
+      title: "Hazırlanıyor",
+      sort_order: 3,
+      grade_level: null,
+      status: "draft",
+      access: "free",
+      node_count: 0,
+      exercise_count: 0,
+    },
+  ],
+  meta: { server_time: "2026-09-16T19:05:20+00:00" },
+};
+
+export const emptyUnitsResponse = {
+  data: [],
+  meta: { server_time: "2026-09-16T19:05:20+00:00" },
+};

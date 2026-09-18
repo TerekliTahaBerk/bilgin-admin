@@ -139,13 +139,39 @@ describe("CoursesBrowser success", () => {
     expect(document.body.textContent).not.toMatch(/soru/i);
   });
 
-  it("renders no link or button for a course, since no detail route exists", async () => {
+  it("links each course row to its unit list", async () => {
     renderBrowser();
 
     await screen.findByText("TYT Türkçe");
 
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    const links = screen.getAllByRole("link");
+
+    expect(links).toHaveLength(courses.length);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(
+      courses.map((course) => `/courses/${course.id}`),
+    );
+  });
+
+  it("gives each row link an accessible name carrying the course", async () => {
+    renderBrowser();
+
+    await screen.findByText("TYT Türkçe");
+
+    const [first] = screen.getAllByRole("link");
+
+    expect(first.textContent).toContain("TYT Türkçe");
+    expect(first.tagName).toBe("A");
+  });
+
+  it("nests no button inside a row link and offers no write action", async () => {
+    renderBrowser();
+
+    await screen.findByText("TYT Türkçe");
+
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+    for (const absent of [/Yayınla/, /Ünite Oluştur/, /Düzenle/, /Yeni/]) {
+      expect(document.body.textContent).not.toMatch(absent);
+    }
   });
 });
 

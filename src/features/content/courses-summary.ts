@@ -2,8 +2,8 @@ import {
   courseScopes,
   type Course,
   type CourseScope,
-  type PublishStatus,
 } from "@/contracts/admin/content";
+import { courseScopeLabels } from "@/features/content/content-labels";
 
 export type CoursesSummary = Readonly<{
   totalCourses: number;
@@ -16,24 +16,6 @@ export type CourseScopeGroup = Readonly<{
   label: string;
   courses: readonly Course[];
 }>;
-
-/** Display labels only — never an input to an authorization decision. */
-export const courseScopeLabels: Readonly<Record<CourseScope, string>> = {
-  tyt: "TYT",
-  ayt: "AYT",
-  ydt: "YDT",
-  lgs: "LGS",
-  kpss: "KPSS",
-  ales: "ALES",
-  yds: "YDS",
-};
-
-export const publishStatusLabels: Readonly<Record<PublishStatus, string>> = {
-  draft: "Taslak",
-  review: "İncelemede",
-  published: "Yayında",
-  archived: "Arşiv",
-};
 
 /**
  * Every figure is derived from the `/courses` payload itself. Exercise totals

@@ -1,38 +1,20 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import type { Course } from "@/contracts/admin/content";
-import { getCourses } from "@/features/content/content-client";
+import { coursesQueryOptions } from "@/features/content/content-queries";
+import { StatusBadge } from "@/features/content/status-badges";
 import {
   groupCoursesByScope,
   isAwaitingContent,
-  publishStatusLabels,
   summarizeCourses,
 } from "@/features/content/courses-summary";
 import type { ApiError } from "@/lib/api/error";
-
-export const COURSES_QUERY_KEY = ["content", "courses"] as const;
-export const COURSES_STALE_TIME_MS = 120_000;
-
-const statusStyles: Record<Course["status"], string> = {
-  published: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  review: "border-amber-200 bg-amber-50 text-amber-800",
-  draft: "border-border bg-surface-muted text-muted",
-  archived: "border-border bg-surface-muted text-muted",
-};
-
-function StatusBadge({ status }: { status: Course["status"] }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyles[status]}`}
-    >
-      {publishStatusLabels[status]}
-    </span>
-  );
-}
 
 function SummaryStrip({ courses }: { courses: readonly Course[] }) {
   const summary = summarizeCourses(courses);
@@ -79,22 +61,32 @@ function CourseRow({ course }: { course: Course }) {
   const awaiting = isAwaitingContent(course);
 
   return (
-    <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{course.name}</p>
-        <p className="truncate font-mono text-xs text-muted">{course.code}</p>
-      </div>
+    <li>
+      {/* The unit list route exists now, so the whole row is a real link. */}
+      <Link
+        className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-surface-muted sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+        href={`/courses/${course.id}`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{course.name}</p>
+          <p className="truncate font-mono text-xs text-muted">{course.code}</p>
+        </div>
 
-      {/* Fixed columns from sm up so badges and counts line up down the list
-          instead of tracking each row's text width. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
-        <span className="inline-flex sm:w-24">
-          <StatusBadge status={course.status} />
-        </span>
-        <span className="inline-block text-xs text-muted sm:w-28 sm:text-right">
-          {awaiting ? "İçerik bekliyor" : `${course.unit_count} ünite`}
-        </span>
-      </div>
+        {/* Fixed columns from sm up so badges and counts line up down the list
+            instead of tracking each row's text width. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
+          <span className="inline-flex sm:w-24">
+            <StatusBadge status={course.status} />
+          </span>
+          <span className="inline-block text-xs text-muted sm:w-28 sm:text-right">
+            {awaiting ? "İçerik bekliyor" : `${course.unit_count} ünite`}
+          </span>
+          <ChevronRight
+            aria-hidden="true"
+            className="hidden size-4 shrink-0 text-muted sm:block"
+          />
+        </div>
+      </Link>
     </li>
   );
 }
@@ -196,11 +188,7 @@ function EmptyState() {
 
 export function CoursesBrowser() {
   const router = useRouter();
-  const query = useQuery<Course[], ApiError>({
-    queryKey: COURSES_QUERY_KEY,
-    queryFn: ({ signal }) => getCourses({ signal }),
-    staleTime: COURSES_STALE_TIME_MS,
-  });
+  const query = useQuery<Course[], ApiError>(coursesQueryOptions());
 
   const isSessionExpired = query.error?.kind === "authentication";
 

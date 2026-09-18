@@ -69,6 +69,56 @@ const COURSES = [
   },
 ];
 
+/** Units per course id. Course 2 deliberately has none. */
+const UNITS = {
+  1: [
+    {
+      id: 11,
+      title: "İlk ve Orta Çağlarda Türk Dünyası",
+      sort_order: 1,
+      grade_level: 9,
+      status: "published",
+      access: "free",
+      node_count: 6,
+      exercise_count: 44,
+    },
+    {
+      id: 12,
+      title: "Tarih ve Zaman",
+      sort_order: 2,
+      grade_level: 12,
+      status: "review",
+      access: "premium",
+      node_count: 4,
+      exercise_count: 12,
+    },
+    {
+      id: 13,
+      title: "Hazırlanıyor",
+      sort_order: 3,
+      grade_level: null,
+      status: "draft",
+      access: "free",
+      node_count: 0,
+      exercise_count: 0,
+    },
+  ],
+  2: [],
+  3: [
+    {
+      id: 31,
+      title: "Vektörler",
+      sort_order: 1,
+      grade_level: 11,
+      status: "archived",
+      access: "premium",
+      node_count: 3,
+      exercise_count: 7,
+    },
+  ],
+  4: [],
+};
+
 function send(response, status, body) {
   const payload = body === null ? "" : JSON.stringify(body);
 
@@ -135,6 +185,27 @@ const server = createServer(async (request, response) => {
     }
 
     send(response, 200, envelope(COURSES));
+    return;
+  }
+
+  const unitsMatch = /^\/api\/admin\/v1\/courses\/(\d+)\/units$/.exec(
+    url.pathname,
+  );
+
+  if (request.method === "GET" && unitsMatch !== null) {
+    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+
+    const units = UNITS[Number(unitsMatch[1])];
+
+    if (units === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+
+    send(response, 200, envelope(units));
     return;
   }
 

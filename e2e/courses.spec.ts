@@ -77,7 +77,7 @@ test("renders the real backend course data", async ({ page }) => {
   await expect(page.getByText(/soru/i)).toHaveCount(0);
 });
 
-test("offers no dead link into a course detail route", async ({ page }) => {
+test("links every course row to its real unit list route", async ({ page }) => {
   await signIn(page);
   await page.goto("/courses");
   await expect(page.getByText("TYT Türkçe")).toBeVisible();
@@ -86,10 +86,16 @@ test("offers no dead link into a course detail route", async ({ page }) => {
     .locator("main a")
     .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
 
+  // Every row links to /courses/<id>; that route exists as of Step 02.
+  expect(hrefs).toHaveLength(E2E_COURSES.length);
   expect(
-    hrefs.filter((href) => href !== null && /^\/courses\/./.test(href)),
-  ).toEqual([]);
+    hrefs.every((href) => href !== null && /^\/courses\/\d+$/.test(href)),
+  ).toBe(true);
   await expect(page.locator("main button")).toHaveCount(0);
+
+  // The link actually resolves rather than 404ing.
+  await page.locator("main a").first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
 test("keeps the backend token out of the browser on the courses page", async ({
