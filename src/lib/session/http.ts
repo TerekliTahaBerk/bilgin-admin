@@ -29,6 +29,17 @@ export function createSessionSuccessResponse(admin: SafeAdmin): NextResponse {
   );
 }
 
+/**
+ * Session-bound resource payload. `no-store` keeps it out of shared HTTP
+ * caches; short-lived client caching is TanStack Query's job.
+ */
+export function createResourceSuccessResponse(data: unknown): NextResponse {
+  return NextResponse.json(
+    { data },
+    { status: 200, headers: SESSION_NO_STORE_HEADERS },
+  );
+}
+
 export function createSessionErrorResponse(
   error: ApiError,
   status: number = browserStatusByErrorKind[error.kind],

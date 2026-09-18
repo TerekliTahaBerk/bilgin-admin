@@ -15,6 +15,38 @@ export const E2E_PASSWORD = "test-password";
 export const E2E_WRONG_PASSWORD = "wrong-password";
 
 export const E2E_ADMIN_NAME = "Taha Berk";
+
+/** Mirrors the COURSES fixture served by e2e/support/mock-backend.mjs. */
+export const E2E_COURSES = [
+  {
+    code: "tyt_turkce",
+    name: "TYT Türkçe",
+    scope: "TYT",
+    status: "Yayında",
+    unitCount: 2,
+  },
+  {
+    code: "tyt_matematik",
+    name: "TYT Temel Matematik",
+    scope: "TYT",
+    status: "Taslak",
+    unitCount: 0,
+  },
+  {
+    code: "ayt_fizik",
+    name: "AYT Fizik",
+    scope: "AYT",
+    status: "İncelemede",
+    unitCount: 1,
+  },
+  {
+    code: "ydt_ingilizce",
+    name: "YDT İngilizce",
+    scope: "YDT",
+    status: "Arşiv",
+    unitCount: 0,
+  },
+] as const;
 export const E2E_ADMIN_ROLE_LABEL = "İçerik Editörü";
 
 /**

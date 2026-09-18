@@ -7,6 +7,7 @@ import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { SessionHeartbeat } from "@/components/app-shell/session-heartbeat";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 type AppShellProps = Readonly<{
   initialAdmin: SafeAdmin;
@@ -56,7 +57,9 @@ export function AppShell({ initialAdmin, children }: AppShellProps) {
         />
 
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mx-auto w-full max-w-[1520px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1520px]">
+            <QueryProvider>{children}</QueryProvider>
+          </div>
         </main>
       </div>
     </div>

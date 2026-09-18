@@ -1,6 +1,6 @@
 "use client";
 
-import { Circle, Home, type LucideIcon } from "lucide-react";
+import { Circle, Home, Library, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -17,6 +17,7 @@ import {
  */
 const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   home: Home,
+  content: Library,
 };
 
 export function BrandMark() {
@@ -52,7 +53,10 @@ export function SidebarNav({ admin, onNavigate }: SidebarNavProps) {
       <ul className="space-y-1">
         {items.map((item) => {
           const Icon = navigationIcons[item.id] ?? Circle;
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <li key={item.id}>

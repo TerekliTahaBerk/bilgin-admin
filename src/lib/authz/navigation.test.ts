@@ -25,17 +25,44 @@ const fixtureItems: readonly NavigationItem[] = [
   },
 ];
 
+const productionNavigation = [
+  { id: "home", label: "Ana Sayfa", href: "/" },
+  { id: "content", label: "İçerik", href: "/courses" },
+];
+
 describe("adminNavigation", () => {
   it("lists only routes that exist today", () => {
-    expect(adminNavigation).toEqual([
-      { id: "home", label: "Ana Sayfa", href: "/" },
-    ]);
+    expect(adminNavigation).toEqual(productionNavigation);
   });
 
-  it("stays visible to an admin without any ability", () => {
-    expect(filterNavigation(adminNavigation, createSafeAdmin())).toEqual([
-      { id: "home", label: "Ana Sayfa", href: "/" },
-    ]);
+  it("requires no ability for any production item", () => {
+    expect(
+      adminNavigation.every((item) => item.requiredAbility === undefined),
+    ).toBe(true);
+  });
+
+  it("stays fully visible to an admin with no abilities at all", () => {
+    const admin = createSafeAdmin({
+      edit_content: false,
+      publish_content: false,
+      edit_curriculum: false,
+      view_users: false,
+    });
+
+    expect(filterNavigation(adminNavigation, admin)).toEqual(
+      productionNavigation,
+    );
+  });
+
+  it("shows the content item regardless of the role name", () => {
+    for (const role of ["content_editor", "content_reviewer", "analyst"]) {
+      const visible = filterNavigation(
+        adminNavigation,
+        createSafeAdmin({}, { role }),
+      );
+
+      expect(visible.map((item) => item.href)).toContain("/courses");
+    }
   });
 });
 

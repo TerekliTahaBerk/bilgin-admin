@@ -14,6 +14,7 @@ import { serverEnv } from "@/lib/env/server";
 
 export const ADMIN_LOGIN_TIMEOUT_MS = 15_000;
 export const ADMIN_ME_TIMEOUT_MS = 10_000;
+export const ADMIN_COURSES_TIMEOUT_MS = 10_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -25,6 +26,11 @@ const ADMIN_BACKEND_ENDPOINTS = {
     method: "GET",
     path: "/api/admin/v1/me",
     timeoutMs: ADMIN_ME_TIMEOUT_MS,
+  },
+  courses: {
+    method: "GET",
+    path: "/api/admin/v1/courses",
+    timeoutMs: ADMIN_COURSES_TIMEOUT_MS,
   },
 } as const;
 
@@ -42,7 +48,7 @@ type AdminBackendRequest =
       signal?: AbortSignal;
     }>
   | Readonly<{
-      operation: "me";
+      operation: "me" | "courses";
       backendToken: string;
       signal?: AbortSignal;
     }>;

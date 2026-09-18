@@ -74,13 +74,32 @@ describe("AppShell navigation", () => {
     }
   });
 
+  it("renders the content route for every authenticated admin", () => {
+    renderShell({
+      ...editor,
+      abilities: {
+        edit_content: false,
+        publish_content: false,
+        edit_curriculum: false,
+        view_users: false,
+      },
+    });
+
+    const links = screen.getAllByRole("link", { name: "İçerik" });
+
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("href")).toBe("/courses");
+    }
+  });
+
   it("renders no navigation entry for a route that does not exist yet", () => {
     renderShell();
 
     for (const absent of [
-      "Dersler",
       "Üniteler",
       "Sorular",
+      "İçe Aktar",
       "Müfredat",
       "Yöneticiler",
       "Kullanıcılar",

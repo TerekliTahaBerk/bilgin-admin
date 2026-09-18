@@ -48,8 +48,20 @@ afterEach(() => {
 });
 
 describe("optimistic root proxy", () => {
-  it("matches only the protected root route", () => {
-    expect(config).toEqual({ matcher: "/" });
+  it("matches exactly the protected routes that exist today", () => {
+    expect(config).toEqual({
+      matcher: ["/", "/courses", "/courses/:path*"],
+    });
+  });
+
+  it("declares no matcher for a route that does not exist yet", () => {
+    const matchers = config.matcher as string[];
+
+    for (const absent of ["/units", "/exercises", "/curriculum", "/admins"]) {
+      expect(matchers.some((pattern) => pattern.startsWith(absent))).toBe(
+        false,
+      );
+    }
   });
 
   it.each([

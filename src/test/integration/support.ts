@@ -45,6 +45,20 @@ export function meRequest(
   return new NextRequest(`${APP_ORIGIN}/api/session/me`, { headers });
 }
 
+export function resourceRequest(
+  path: string,
+  seal: string | null,
+  extraHeaders: Record<string, string> = {},
+): NextRequest {
+  const headers = new Headers(extraHeaders);
+
+  if (seal !== null) {
+    headers.set("cookie", `${SESSION_COOKIE_NAME}=${seal}`);
+  }
+
+  return new NextRequest(`${APP_ORIGIN}${path}`, { headers });
+}
+
 export function setCookieHeader(response: NextResponse): string | undefined {
   return response.headers
     .getSetCookie()

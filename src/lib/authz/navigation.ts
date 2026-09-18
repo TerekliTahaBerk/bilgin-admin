@@ -15,6 +15,9 @@ export type NavigationItem = {
  */
 export const adminNavigation: readonly NavigationItem[] = [
   { id: "home", label: "Ana Sayfa", href: "/" },
+  // Content reads are open to every authenticated admin on the backend, so this
+  // item carries no requiredAbility.
+  { id: "content", label: "İçerik", href: "/courses" },
 ];
 
 /**

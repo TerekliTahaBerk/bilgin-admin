@@ -30,6 +30,45 @@ const ADMIN = {
 const VALID_EMAIL = "editor@bilgin.test";
 const VALID_PASSWORD = "test-password";
 
+/**
+ * Deliberately varied: several scopes, every publish status the backend can
+ * emit (review included) and two courses with no units.
+ */
+const COURSES = [
+  {
+    id: 1,
+    code: "tyt_turkce",
+    name: "TYT Türkçe",
+    scope: "tyt",
+    status: "published",
+    unit_count: 2,
+  },
+  {
+    id: 2,
+    code: "tyt_matematik",
+    name: "TYT Temel Matematik",
+    scope: "tyt",
+    status: "draft",
+    unit_count: 0,
+  },
+  {
+    id: 3,
+    code: "ayt_fizik",
+    name: "AYT Fizik",
+    scope: "ayt",
+    status: "review",
+    unit_count: 1,
+  },
+  {
+    id: 4,
+    code: "ydt_ingilizce",
+    name: "YDT İngilizce",
+    scope: "ydt",
+    status: "archived",
+    unit_count: 0,
+  },
+];
+
 function send(response, status, body) {
   const payload = body === null ? "" : JSON.stringify(body);
 
@@ -86,6 +125,16 @@ const server = createServer(async (request, response) => {
       message: "The given data was invalid.",
       errors: { email: ["E-posta veya şifre hatalı."] },
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/admin/v1/courses") {
+    if (request.headers.authorization !== `Bearer ${E2E_BACKEND_TOKEN}`) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+
+    send(response, 200, envelope(COURSES));
     return;
   }
 
