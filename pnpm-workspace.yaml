@@ -1,2 +1,5 @@
 allowBuilds:
   unrs-resolver: true
+  # MSW is used for Node integration tests only. Its postinstall writes a
+  # browser service worker into public/, which this project does not use.
+  msw: false

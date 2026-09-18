@@ -1,13 +1,16 @@
+import type { SafeAdmin } from "@/contracts/admin/session";
 import type { SessionClientResult } from "@/features/auth/session-client";
 
 type SessionHeartbeatControllerOptions = Readonly<{
   checkSession: (signal: AbortSignal) => Promise<SessionClientResult>;
   onAuthenticationFailure: () => void;
+  onSessionSuccess?: (admin: SafeAdmin) => void;
 }>;
 
 export function createSessionHeartbeatController({
   checkSession,
   onAuthenticationFailure,
+  onSessionSuccess,
 }: SessionHeartbeatControllerOptions) {
   let active = true;
   let abortController: AbortController | null = null;
@@ -33,7 +36,16 @@ export function createSessionHeartbeatController({
         return;
       }
 
-      if (active && !result.ok && result.error.kind === "authentication") {
+      if (!active) {
+        return;
+      }
+
+      if (result.ok) {
+        onSessionSuccess?.(result.admin);
+        return;
+      }
+
+      if (result.error.kind === "authentication") {
         onAuthenticationFailure();
       }
     })();

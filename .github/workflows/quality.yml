@@ -1,0 +1,93 @@
+name: Quality
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+# Least privilege: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CI-only placeholder values. No real backend and no real secret is used:
+  # the build must never need network access to a Laravel instance.
+  BILGIN_API_URL: https://api.example.test
+  APP_ORIGIN: https://admin.example.test
+  SESSION_SECRET: ci-test-session-secret-that-is-at-least-32-characters-long
+  SESSION_MAX_AGE_SECONDS: "28800"
+
+jobs:
+  quality:
+    name: Lint, types, unit, integration, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # The pnpm version comes from packageManager in package.json, so the
+      # repository stays the single source of truth.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Unit and component tests
+        run: pnpm test:unit:coverage
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Production build
+        run: pnpm build
+
+  e2e:
+    name: Auth smoke E2E
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The suite starts its own local mock backend and Next.js server, and its
+      # loopback-only target guard fails the run before any browser starts if it
+      # is ever pointed elsewhere.
+      - name: Auth smoke E2E
+        run: pnpm test:e2e
