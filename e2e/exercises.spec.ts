@@ -174,22 +174,28 @@ test("keeps the session when the unit does not exist", async ({ page }) => {
   );
 });
 
-test("offers only the supported multiple-choice editor actions", async ({
-  page,
-}) => {
+test("offers only the supported editor actions", async ({ page }) => {
   await signIn(page);
   await page.goto(EXERCISES_PATH);
   await expect(rows(page)).toHaveCount(5);
 
   await expect(
-    page.getByRole("link", { name: "Yeni çoktan seçmeli soru" }),
+    page.getByRole("link", { name: "Yeni çoktan seçmeli" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(1);
+  await expect(
+    page.getByRole("link", { name: "Yeni doğru / yanlış" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Yeni boşluk doldurma" }),
+  ).toBeVisible();
+  // The three M2 editor types are editable; matching and image_hotspot rows
+  // stay read-only.
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(3);
 
   for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-  await expect(page.locator("main ul li a")).toHaveCount(1);
+  await expect(page.locator("main ul li a")).toHaveCount(3);
   await expect(page.locator("main ul li button")).toHaveCount(0);
 });
 

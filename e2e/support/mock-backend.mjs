@@ -292,7 +292,8 @@ const EXERCISE_DETAILS = {
     topic_id: 1,
     difficulty: 3,
     content: { statement: "Uygurlar yerleşik hayata geçti." },
-    answer_key: { value: true },
+    // Deliberately the falsy boolean: the editor must still preselect "Yanlış".
+    answer_key: { value: false },
     explanation: null,
     applicable_scopes: ["tyt"],
     status: "draft",
@@ -304,7 +305,71 @@ const EXERCISE_DETAILS = {
       needs_review: true,
     },
   },
+  103: {
+    id: 103,
+    type: "fill_blank",
+    topic_id: 2,
+    difficulty: 3,
+    content: {
+      template: "Yazısız hukuk kurallarına {{0}} denir.",
+      choices: ["Töre", "Kurultay", "Toy", "Yuğ"],
+    },
+    answer_key: { blanks: ["Töre"] },
+    explanation: null,
+    applicable_scopes: ["tyt", "ayt"],
+    status: "review",
+    version: 1,
+    stats: {
+      attempts: 15,
+      correct_rate: 60,
+      avg_seconds: 23,
+      needs_review: false,
+    },
+  },
+  // Read-only on purpose: matching is not an M2 editor type, so its detail
+  // must stay readable while the editor refuses to mutate it.
+  104: {
+    id: 104,
+    type: "matching",
+    topic_id: 2,
+    difficulty: 5,
+    content: {
+      pairs: [
+        { left: "Töre", right: "Yazısız hukuk" },
+        { left: "Kurultay", right: "Devlet meclisi" },
+      ],
+    },
+    answer_key: { pairs: [["Töre", "Yazısız hukuk"]] },
+    explanation: null,
+    applicable_scopes: ["ayt"],
+    status: "archived",
+    version: 1,
+    stats: {
+      attempts: 22,
+      correct_rate: 9,
+      avg_seconds: 51,
+      needs_review: true,
+    },
+  },
 };
+
+/** Every editable type keeps a readable list preview. */
+function previewOf(detail) {
+  if (detail.type === "true_false") return detail.content.statement;
+  if (detail.type === "fill_blank") return detail.content.template;
+  return detail.content.stem;
+}
+
+/** The answer key shape differs per type; `false` is a real answer. */
+function answerKeyChanged(current, next) {
+  if ("blanks" in next || "blanks" in current) {
+    return JSON.stringify(current.blanks) !== JSON.stringify(next.blanks);
+  }
+  if ("value" in next || "value" in current) {
+    return current.value !== next.value;
+  }
+  return current.correct_option_id !== next.correct_option_id;
+}
 
 let nextExerciseId = 201;
 
@@ -499,7 +564,7 @@ const server = createServer(async (request, response) => {
     const id = nextExerciseId++;
     const detail = {
       id,
-      type: "multiple_choice",
+      type: body.type,
       topic_id: body.topic_id,
       difficulty: body.difficulty,
       content: body.content,
@@ -531,7 +596,7 @@ const server = createServer(async (request, response) => {
       status: detail.status,
       version: detail.version,
       scopes: detail.applicable_scopes,
-      preview: detail.content.stem,
+      preview: previewOf(detail),
       stats: detail.stats,
     });
     send(response, 201, envelope({ id, status: "draft" }));
@@ -552,15 +617,13 @@ const server = createServer(async (request, response) => {
       return;
     }
     const body = await readBody(request);
-    const answerChanged =
-      body.answer_key.correct_option_id !==
-      current.answer_key.correct_option_id;
+    const answerChanged = answerKeyChanged(current.answer_key, body.answer_key);
     Object.assign(current, body, { version: current.version + 1 });
     for (const exercises of Object.values(EXERCISES)) {
       const row = exercises.find((exercise) => exercise.id === id);
       if (row !== undefined)
         Object.assign(row, {
-          preview: current.content.stem,
+          preview: previewOf(current),
           version: current.version,
         });
     }

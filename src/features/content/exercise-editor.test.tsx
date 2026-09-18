@@ -129,6 +129,29 @@ beforeEach(() => {
   refresh.mockReset();
 });
 
+describe("ExerciseEditor native fallback semantics", () => {
+  it("submits natively with POST so question content can never reach the URL", async () => {
+    const { container } = renderEditor();
+    await screen.findByRole("heading", { name: "Yeni çoktan seçmeli soru" });
+
+    // Resolve the real editor form through the DOM the user submits, not a
+    // source-string match: the form that actually owns the answer-key fields.
+    const stem = screen.getByLabelText("Soru kökü") as HTMLTextAreaElement;
+    const form = stem.closest("form");
+
+    expect(form).not.toBeNull();
+    expect(container.contains(form)).toBe(true);
+    // A form without an explicit method defaults to GET, which would serialise
+    // stem, option texts, correctOptionId and explanation into the query
+    // string on a pre-hydration submit.
+    expect(form!.getAttribute("method")).toBe("post");
+    expect(form!.method).toBe("post");
+    expect(
+      within(form!).getByLabelText("b şıkkını doğru cevap seç"),
+    ).toBeDefined();
+  });
+});
+
 describe("multiple choice create editor", () => {
   it("renders real topics, four stable options and a live preview", async () => {
     const user = userEvent.setup();
@@ -347,7 +370,13 @@ describe("multiple choice edit editor", () => {
   });
 
   it("renders a safe unsupported-type state without a mutation form", async () => {
-    getExerciseDetail.mockResolvedValue({ ...detail, type: "true_false" });
+    // matching is not an M2 editor type; it stays readable but not editable.
+    getExerciseDetail.mockResolvedValue({
+      ...detail,
+      type: "matching",
+      content: { pairs: [{ left: "a", right: "b" }] },
+      answer_key: { pairs: [["a", "b"]] },
+    });
     renderEditor(101);
     expect(
       await screen.findByRole("heading", {

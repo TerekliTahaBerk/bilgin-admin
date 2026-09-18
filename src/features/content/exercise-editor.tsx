@@ -2,11 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 
 import type {
@@ -16,9 +16,11 @@ import type {
   Unit,
   UnitExercisesData,
 } from "@/contracts/admin/content";
-import type {
-  CourseTopicsData,
-  ExerciseDetail,
+import {
+  isSupportedEditorType,
+  type CourseTopicsData,
+  type ExerciseDetail,
+  type SupportedEditorType,
 } from "@/contracts/admin/exercise-editor";
 import { courseScopeLabels } from "@/features/content/content-labels";
 import {
@@ -38,16 +40,29 @@ import {
 } from "@/features/content/content-queries";
 import {
   consumeEditorDefaults,
-  correctAnswerAfterOptionRemoval,
-  createMultipleChoiceDefaults,
+  createEditorDefaults,
+  editorFormSchema,
+  editorTypeHeadings,
+  editorTypeLabels,
   formValuesFromDetail,
-  multipleChoiceFormSchema,
-  nextOptionId,
   preserveEditorDefaults,
   serializeCreateExercise,
   serializeUpdateExercise,
-  type MultipleChoiceFormValues,
-} from "@/features/content/multiple-choice-form";
+  type EditorFormValues,
+} from "@/features/content/editor-form";
+import { FieldError } from "@/features/content/editor-field-error";
+import {
+  FillBlankFields,
+  FillBlankPreview,
+} from "@/features/content/fill-blank-section";
+import {
+  MultipleChoiceFields,
+  MultipleChoicePreview,
+} from "@/features/content/multiple-choice-section";
+import {
+  TrueFalseFields,
+  TrueFalsePreview,
+} from "@/features/content/true-false-section";
 import { StatusBadge } from "@/features/content/status-badges";
 import type { ApiError } from "@/lib/api/error";
 
@@ -65,6 +80,40 @@ const SCOPE_OPTIONS: CourseScope[] = [
   "yds",
 ];
 
+/**
+ * Backend field names map onto the active type's form paths. Only the two
+ * question fields differ per type; everything else is shared.
+ */
+const SERVER_FIELD_PATHS: Record<
+  SupportedEditorType,
+  Record<string, FieldPath<EditorFormValues>>
+> = {
+  multiple_choice: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "multipleChoice.stem",
+    answer_key: "multipleChoice.correctOptionId",
+  },
+  true_false: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "trueFalse.statement",
+    answer_key: "trueFalse.answerValue",
+  },
+  fill_blank: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "fillBlank.template",
+    answer_key: "fillBlank.blanks",
+  },
+};
+
 type SaveIntent = "save" | "save-new";
 
 function isApiError(error: unknown): error is ApiError {
@@ -73,14 +122,6 @@ function isApiError(error: unknown): error is ApiError {
     error !== null &&
     "kind" in error &&
     "message" in error
-  );
-}
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  return message === undefined ? null : (
-    <p className="mt-1.5 text-xs text-red-700" id={id}>
-      {message}
-    </p>
   );
 }
 
@@ -118,91 +159,23 @@ export function EditorAccessDenied() {
   );
 }
 
-function Preview({ values }: { values: MultipleChoiceFormValues }) {
-  const correct = values.options.find(
-    (option) => option.id === values.correctOptionId,
-  );
-
+export function EditorUnsupportedType() {
   return (
-    <aside
-      className="lg:sticky lg:top-6 lg:self-start"
-      aria-label="Canlı önizleme"
-    >
-      <div className="rounded-lg border border-border bg-surface">
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold">Canlı önizleme</h2>
-          <p className="mt-1 text-xs text-muted">
-            Yönetici görünümü · doğru cevap görünür
-          </p>
-        </div>
-        <div className="space-y-5 p-5">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">
-              Çoktan seçmeli · Zorluk {values.difficulty}
-            </p>
-            <p className="mt-2 whitespace-pre-wrap text-base font-medium">
-              {values.stem.trim() || "Soru kökü burada görünecek."}
-            </p>
-          </div>
-
-          <ol className="space-y-2">
-            {values.options.map((option) => {
-              const isCorrect = option.id === values.correctOptionId;
-              return (
-                <li
-                  className={`flex gap-3 rounded-md border px-3 py-2.5 text-sm ${
-                    isCorrect
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-                      : "border-border bg-surface-muted"
-                  }`}
-                  key={option.id}
-                >
-                  <span className="font-semibold">{option.id}</span>
-                  <span className="min-w-0 whitespace-pre-wrap">
-                    {option.text.trim() || "Şık metni"}
-                  </span>
-                  {isCorrect ? (
-                    <span className="ml-auto shrink-0 text-xs font-medium">
-                      Doğru
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-
-          <dl className="grid gap-3 border-t border-border pt-4 text-xs">
-            <div>
-              <dt className="font-medium text-muted">Kapsam</dt>
-              <dd className="mt-0.5">
-                {values.scopes.length === 0
-                  ? "Seçilmedi"
-                  : values.scopes
-                      .map((scope) => courseScopeLabels[scope])
-                      .join(", ")}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted">Doğru cevap</dt>
-              <dd className="mt-0.5">
-                {correct === undefined
-                  ? "Seçilmedi"
-                  : `${correct.id}: ${correct.text || "Şık metni"}`}
-              </dd>
-            </div>
-            {values.explanation.trim().length === 0 ? null : (
-              <div>
-                <dt className="font-medium text-muted">Açıklama</dt>
-                <dd className="mt-0.5 whitespace-pre-wrap">
-                  {values.explanation}
-                </dd>
-              </div>
-            )}
-          </dl>
-        </div>
-      </div>
-    </aside>
+    <SafeState
+      message="Bu soru tipi çoktan seçmeli, doğru / yanlış ve boşluk doldurma editörleriyle değiştirilemez."
+      title="Bu soru tipi henüz bu editörde desteklenmiyor."
+    />
   );
+}
+
+/** Create routes carry only this safe enum — never question content. */
+export function createExercisePath(
+  courseId: number,
+  unitId: number,
+  type: SupportedEditorType,
+): string {
+  const base = `/courses/${courseId}/units/${unitId}/exercises/new`;
+  return type === "multiple_choice" ? base : `${base}?type=${type}`;
 }
 
 export type ExerciseEditorProps = Readonly<{
@@ -210,6 +183,8 @@ export type ExerciseEditorProps = Readonly<{
   unitId: number;
   exerciseId?: number;
   canEdit: boolean;
+  /** Which editor a create route opens. Ignored in edit mode. */
+  createType?: SupportedEditorType;
 }>;
 
 export function ExerciseEditor({
@@ -217,13 +192,14 @@ export function ExerciseEditor({
   unitId,
   exerciseId,
   canEdit,
+  createType = "multiple_choice",
 }: ExerciseEditorProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const isEdit = exerciseId !== undefined;
   const [consumedDefaults] = useState(() => consumeEditorDefaults());
   const [initialDefaults] = useState(() =>
-    createMultipleChoiceDefaults(consumedDefaults),
+    createEditorDefaults(createType, consumedDefaults),
   );
   const [savedVersion, setSavedVersion] = useState<number | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -234,23 +210,16 @@ export function ExerciseEditor({
   const scopedCreateDefaults = useRef(false);
   const mutationInFlight = useRef(false);
 
-  const form = useForm<MultipleChoiceFormValues>({
-    resolver: zodResolver(multipleChoiceFormSchema),
+  const form = useForm<EditorFormValues>({
+    resolver: zodResolver(editorFormSchema),
     mode: "onChange",
     defaultValues: initialDefaults,
   });
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "options",
-    keyName: "fieldKey",
-  });
-  const watched = useWatch({ control: form.control });
-  const previewValues = {
-    ...createMultipleChoiceDefaults(),
-    ...watched,
-    options: watched.options ?? [],
-    scopes: watched.scopes ?? [],
-  } as MultipleChoiceFormValues;
+  // useWatch subscribes this component to every change; getValues then reads
+  // the complete, fully typed values — no partial merge and no cast.
+  useWatch({ control: form.control });
+  const values = form.getValues();
+  const activeType = values.type;
 
   const coursesQuery = useQuery<Course[], ApiError>(coursesQueryOptions());
   const unitsQuery = useQuery<Unit[], ApiError>(
@@ -273,7 +242,7 @@ export function ExerciseEditor({
     () => new Set(topicsQuery.data?.topics.map((topic) => topic.id) ?? []),
     [topicsQuery.data],
   );
-  const selectedTopicId = previewValues.topicId;
+  const selectedTopicId = values.topicId;
   const selectedTopicMissing =
     selectedTopicId !== null &&
     topicsQuery.isSuccess &&
@@ -302,11 +271,11 @@ export function ExerciseEditor({
       return;
     }
 
-    const values = formValuesFromDetail(detailQuery.data);
-    if (values === null) return;
+    const hydrated = formValuesFromDetail(detailQuery.data);
+    if (hydrated === null) return;
 
     hydratedExercise.current = detailQuery.data.id;
-    form.reset(values);
+    form.reset(hydrated);
   }, [detailQuery.data, form, isEdit]);
 
   const createMutation = useMutation({
@@ -316,11 +285,11 @@ export function ExerciseEditor({
   const updateMutation = useMutation({
     mutationFn: ({
       id,
-      values,
+      values: input,
     }: {
       id: number;
-      values: MultipleChoiceFormValues;
-    }) => updateExercise(id, serializeUpdateExercise(values)),
+      values: EditorFormValues;
+    }) => updateExercise(id, serializeUpdateExercise(input)),
     retry: 0,
   });
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -339,7 +308,7 @@ export function ExerciseEditor({
     ]);
   }
 
-  function applyMutationError(error: unknown) {
+  function applyMutationError(error: unknown, type: SupportedEditorType) {
     setSuccessMessage(null);
     setSchemaErrors([]);
 
@@ -372,24 +341,17 @@ export function ExerciseEditor({
       setSchemaErrors(parsed.success ? (parsed.data.schema_errors ?? []) : []);
     }
 
-    const fieldMap = {
-      topic_id: "topicId",
-      difficulty: "difficulty",
-      explanation: "explanation",
-      applicable_scopes: "scopes",
-      content: "stem",
-      answer_key: "correctOptionId",
-    } as const;
+    const paths = SERVER_FIELD_PATHS[type];
 
     for (const [backendField, messages] of Object.entries(error.fields ?? {})) {
-      const field = fieldMap[backendField as keyof typeof fieldMap];
-      if (field !== undefined && messages[0] !== undefined) {
-        form.setError(field, { type: "server", message: messages[0] });
+      const path = paths[backendField];
+      if (path !== undefined && messages[0] !== undefined) {
+        form.setError(path, { type: "server", message: messages[0] });
       }
     }
   }
 
-  async function save(values: MultipleChoiceFormValues, intent: SaveIntent) {
+  async function save(input: EditorFormValues, intent: SaveIntent) {
     if (mutationInFlight.current || isPending || selectedTopicMissing) return;
 
     mutationInFlight.current = true;
@@ -401,16 +363,19 @@ export function ExerciseEditor({
     try {
       if (!isEdit) {
         const result = await createMutation.mutateAsync(
-          serializeCreateExercise(values, unitId),
+          serializeCreateExercise(input, unitId),
         );
         await invalidateAfterSave();
 
         if (intent === "save-new") {
+          // The next question keeps the shared context and the editor type,
+          // and starts with an empty statement/stem and no answer at all.
           form.reset(
-            createMultipleChoiceDefaults({
-              topicId: values.topicId,
-              difficulty: values.difficulty,
-              scopes: [...values.scopes],
+            createEditorDefaults(input.type, {
+              type: input.type,
+              topicId: input.topicId,
+              difficulty: input.difficulty,
+              scopes: [...input.scopes],
             }),
           );
           setSavedVersion(null);
@@ -426,20 +391,20 @@ export function ExerciseEditor({
 
       const result = await updateMutation.mutateAsync({
         id: exerciseId,
-        values,
+        values: input,
       });
       await invalidateAfterSave();
 
       if (intent === "save-new") {
-        preserveEditorDefaults(values);
-        router.replace(`/courses/${courseId}/units/${unitId}/exercises/new`);
+        preserveEditorDefaults(input);
+        router.replace(createExercisePath(courseId, unitId, input.type));
         return;
       }
 
       setSavedVersion(result.version);
       setWarning(result.warning ?? null);
       setSuccessMessage("Kaydedildi");
-      form.reset(values);
+      form.reset(input);
       queryClient.setQueryData<ExerciseDetail>(
         exerciseDetailQueryKey(exerciseId),
         (current) =>
@@ -447,17 +412,19 @@ export function ExerciseEditor({
             ? current
             : {
                 ...current,
-                ...serializeUpdateExercise(values),
+                ...serializeUpdateExercise(input),
                 version: result.version,
               },
       );
     } catch (error) {
-      applyMutationError(error);
+      applyMutationError(error, input.type);
     } finally {
       mutationInFlight.current = false;
     }
   }
 
+  // One keyboard listener for every editor type: the type-specific sections
+  // never register their own, so a shortcut can only fire a single save.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const command = event.metaKey || event.ctrlKey;
@@ -469,8 +436,8 @@ export function ExerciseEditor({
       event.preventDefault();
       if (mutationInFlight.current || isPending) return;
 
-      void form.handleSubmit((values) =>
-        save(values, saveNew ? "save-new" : "save"),
+      void form.handleSubmit((submitted) =>
+        save(submitted, saveNew ? "save-new" : "save"),
       )();
     };
 
@@ -479,11 +446,11 @@ export function ExerciseEditor({
   });
 
   function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
-    void form.handleSubmit((values) => save(values, "save"))(event);
+    void form.handleSubmit((submitted) => save(submitted, "save"))(event);
   }
 
   function handleSaveNewClick() {
-    void form.handleSubmit((values) => save(values, "save-new"))();
+    void form.handleSubmit((submitted) => save(submitted, "save-new"))();
   }
 
   if (!canEdit) return <EditorAccessDenied />;
@@ -546,13 +513,10 @@ export function ExerciseEditor({
     );
   }
 
-  if (isEdit && detailQuery.data?.type !== "multiple_choice") {
-    return (
-      <SafeState
-        message="Bu soru tipi M2 Step 01 kapsamındaki çoktan seçmeli editör tarafından değiştirilemez."
-        title="Bu soru tipi henüz bu editörde desteklenmiyor."
-      />
-    );
+  // Types this editor cannot mutate stay readable in the list and the detail
+  // API; only the editing surface is withheld.
+  if (isEdit && !isSupportedEditorType(detailQuery.data?.type ?? "")) {
+    return <EditorUnsupportedType />;
   }
 
   const disableSave =
@@ -565,20 +529,7 @@ export function ExerciseEditor({
   const status: PublishStatus = isEdit
     ? (detailQuery.data?.status ?? "draft")
     : "draft";
-
-  function removeOptionAt(index: number) {
-    if (fields.length <= 2) return;
-    const removedId = form.getValues(`options.${index}.id`);
-    const nextCorrect = correctAnswerAfterOptionRemoval(
-      form.getValues("correctOptionId"),
-      removedId,
-    );
-    remove(index);
-    form.setValue("correctOptionId", nextCorrect, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  }
+  const headings = editorTypeHeadings[activeType];
 
   return (
     <div className="space-y-6">
@@ -593,16 +544,14 @@ export function ExerciseEditor({
         <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">
-              {isEdit
-                ? "Çoktan seçmeli soruyu düzenle"
-                : "Yeni çoktan seçmeli soru"}
+              {isEdit ? headings.edit : headings.create}
             </h1>
             <p className="mt-1 text-sm text-muted">
               {course?.name} · {unit?.title}
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted">
-            <span>Tip: Çoktan seçmeli</span>
+            <span>Tip: {editorTypeLabels[activeType]}</span>
             <StatusBadge status={status} />
             {version === null ? null : <span>v{version}</span>}
           </div>
@@ -644,9 +593,26 @@ export function ExerciseEditor({
         </div>
       )}
 
+      {/*
+       * method="post" is a security fallback, not a second mutation path, and
+       * there is exactly one form element for every editor type. A form
+       * without an explicit method submits natively with GET, so a submit that
+       * lands before React hydrates (or with JavaScript disabled or broken)
+       * would serialise every field — statement, stem, option texts, the
+       * template, choices, the answer, explanation — into the URL query
+       * string, and from there into
+       * history, referrers and access logs. POST keeps the answer key in the
+       * request body; the page route does not handle POST, so the native
+       * submit simply fails instead of leaking.
+       *
+       * Once hydrated, handleFormSubmit preventDefaults and the normal
+       * react-hook-form -> createExercise/updateExercise -> same-origin JSON
+       * BFF flow runs unchanged.
+       */}
       <form
         aria-busy={isPending}
         className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)]"
+        method="post"
         onSubmit={handleFormSubmit}
       >
         <div className="space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
@@ -735,102 +701,18 @@ export function ExerciseEditor({
             className="space-y-4 border-t border-border pt-5"
           >
             <h2 className="text-sm font-semibold" id="question-fields">
-              Soru ve şıklar
+              {activeType === "multiple_choice"
+                ? "Soru ve şıklar"
+                : "Soru içeriği"}
             </h2>
-            <div>
-              <label className="text-sm font-medium" htmlFor="stem">
-                Soru kökü
-              </label>
-              <textarea
-                aria-describedby="stem-error"
-                className="mt-1.5 min-h-28 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-                id="stem"
-                {...form.register("stem")}
-              />
-              <FieldError
-                id="stem-error"
-                message={form.formState.errors.stem?.message}
-              />
-            </div>
 
-            <div className="space-y-3">
-              {fields.map((field, index) => {
-                const optionId = field.id;
-                return (
-                  <div
-                    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3"
-                    key={field.fieldKey}
-                  >
-                    <label
-                      className="mt-2 inline-flex size-5 items-center justify-center"
-                      title="Doğru cevap"
-                    >
-                      <input
-                        aria-label={`${optionId} şıkkını doğru cevap seç`}
-                        type="radio"
-                        value={optionId}
-                        {...form.register("correctOptionId")}
-                      />
-                    </label>
-                    <div>
-                      <div className="flex rounded-md border border-border bg-surface focus-within:outline-2 focus-within:outline-primary">
-                        <input
-                          type="hidden"
-                          {...form.register(`options.${index}.id`)}
-                        />
-                        <span className="border-r border-border bg-surface-muted px-3 py-2 text-sm font-semibold">
-                          {optionId}
-                        </span>
-                        <input
-                          aria-label={`${optionId} şıkkı metni`}
-                          className="min-w-0 flex-1 rounded-r-md px-3 py-2 text-sm outline-none"
-                          {...form.register(`options.${index}.text`)}
-                        />
-                      </div>
-                      <FieldError
-                        id={`option-${index}-error`}
-                        message={
-                          form.formState.errors.options?.[index]?.text?.message
-                        }
-                      />
-                    </div>
-                    <button
-                      aria-label={`${optionId} şıkkını kaldır`}
-                      className="mt-0.5 inline-flex size-9 items-center justify-center rounded-md border border-border text-muted hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={fields.length <= 2}
-                      onClick={() => removeOptionAt(index)}
-                      type="button"
-                    >
-                      <Trash2 aria-hidden="true" className="size-4" />
-                    </button>
-                  </div>
-                );
-              })}
-              <FieldError
-                id="options-error"
-                message={
-                  form.formState.errors.options?.root?.message ??
-                  form.formState.errors.options?.message
-                }
-              />
-              <FieldError
-                id="correct-error"
-                message={form.formState.errors.correctOptionId?.message}
-              />
-              <button
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-surface-muted"
-                onClick={() => {
-                  const id = nextOptionId(
-                    form.getValues("options").map((option) => option.id),
-                  );
-                  append({ id, text: "" });
-                }}
-                type="button"
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                Şık ekle
-              </button>
-            </div>
+            {activeType === "multiple_choice" ? (
+              <MultipleChoiceFields form={form} />
+            ) : activeType === "true_false" ? (
+              <TrueFalseFields form={form} />
+            ) : (
+              <FillBlankFields form={form} />
+            )}
 
             <div>
               <div className="flex items-center justify-between gap-3">
@@ -838,7 +720,7 @@ export function ExerciseEditor({
                   Açıklama
                 </label>
                 <span className="text-xs text-muted">
-                  {previewValues.explanation.length}/2000
+                  {values.explanation.length}/2000
                 </span>
               </div>
               <textarea
@@ -890,7 +772,13 @@ export function ExerciseEditor({
           </div>
         </div>
 
-        <Preview values={previewValues} />
+        {activeType === "multiple_choice" ? (
+          <MultipleChoicePreview values={values} />
+        ) : activeType === "true_false" ? (
+          <TrueFalsePreview values={values} />
+        ) : (
+          <FillBlankPreview values={values} />
+        )}
       </form>
     </div>
   );
