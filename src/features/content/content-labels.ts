@@ -1,6 +1,7 @@
 import type {
   AccessLevel,
   CourseScope,
+  ExerciseType,
   PublishStatus,
 } from "@/contracts/admin/content";
 
@@ -28,6 +29,23 @@ export const publishStatusLabels: Readonly<Record<PublishStatus, string>> = {
 export const accessLevelLabels: Readonly<Record<AccessLevel, string>> = {
   free: "Ücretsiz",
   premium: "Premium",
+};
+
+/**
+ * Display names for the ten backend exercise types. A label here says the list
+ * can read the type — it says nothing about editor support.
+ */
+export const exerciseTypeLabels: Readonly<Record<ExerciseType, string>> = {
+  multiple_choice: "Çoktan Seçmeli",
+  true_false: "Doğru / Yanlış",
+  fill_blank: "Boşluk Doldurma",
+  matching: "Eşleştirme",
+  ordering: "Sıralama",
+  word_order: "Kelime Sıralama",
+  numeric_input: "Sayısal Girdi",
+  flashcard: "Bilgi Kartı",
+  image_hotspot: "Görsel Bölge",
+  diagram_label: "Diyagram Etiketleme",
 };
 
 /** Tailwind classes per status; the text label always carries the meaning. */

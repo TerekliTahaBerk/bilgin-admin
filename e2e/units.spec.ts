@@ -96,13 +96,21 @@ test("offers no publish, create or exercise navigation yet", async ({
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
 
-  // Unit rows are inert; the only link is the way back.
+  // Rows now link to their exercise list; no buttons anywhere.
   const hrefs = await page
     .locator("main a")
     .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
 
-  expect(hrefs).toEqual(["/courses"]);
-  await expect(page.locator("main li a")).toHaveCount(0);
+  expect(hrefs[0]).toBe("/courses");
+  expect(
+    hrefs
+      .slice(1)
+      .every((href) =>
+        new RegExp(`^/courses/${E2E_COURSE_WITH_UNITS_ID}/units/\\d+$`).test(
+          href ?? "",
+        ),
+      ),
+  ).toBe(true);
   await expect(page.locator("main li button")).toHaveCount(0);
   await expect(page.locator("main button")).toHaveCount(0);
 });

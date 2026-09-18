@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCourseUnits, getCourses } from "@/features/content/content-client";
+import {
+  getCourseUnits,
+  getCourses,
+  getUnitExercises,
+} from "@/features/content/content-client";
 import type { ApiError } from "@/lib/api/error";
 import {
   validCoursesResponse,
   validUnitsResponse,
 } from "@/test/fixtures/courses-api";
+import { validUnitExercisesResponse } from "@/test/fixtures/exercises-api";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -214,5 +219,132 @@ describe("getCourseUnits responses", () => {
     stubFetch(new TypeError("fetch failed"));
 
     await expect(getCourseUnits(1)).rejects.toMatchObject({ kind: "network" });
+  });
+});
+
+describe("getUnitExercises request", () => {
+  it("builds the relative BFF path from the numeric unit id", async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ data: validUnitExercisesResponse.data }),
+    );
+
+    await getUnitExercises(12);
+
+    const [path, init] = fetchMock.mock.calls[0]!;
+
+    expect(path).toBe("/api/admin/units/12/exercises");
+    expect(init?.method).toBe("GET");
+    expect(init?.credentials).toBe("same-origin");
+    expect(init?.cache).toBe("no-store");
+  });
+
+  it.each([
+    [
+      { type: "multiple_choice" },
+      "/api/admin/units/12/exercises?type=multiple_choice",
+    ],
+    [{ status: "draft" }, "/api/admin/units/12/exercises?status=draft"],
+    [
+      { type: "multiple_choice", status: "draft" },
+      "/api/admin/units/12/exercises?type=multiple_choice&status=draft",
+    ],
+  ] as const)("encodes the filters %o exactly", async (filters, expected) => {
+    const fetchMock = stubFetch(
+      jsonResponse({ data: validUnitExercisesResponse.data }),
+    );
+
+    await getUnitExercises(12, filters);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe(expected);
+  });
+
+  it("sends no Authorization header and knows no backend origin", async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ data: validUnitExercisesResponse.data }),
+    );
+
+    await getUnitExercises(12);
+
+    const [path, init] = fetchMock.mock.calls[0]!;
+    const headers = new Headers(init?.headers);
+
+    expect(headers.get("authorization")).toBeNull();
+    expect(String(path)).not.toContain("http");
+    expect(String(path)).not.toContain("admin/v1");
+  });
+
+  it.each([
+    ["zero", 0],
+    ["a traversal string", "12/../../me" as unknown as number],
+    ["a query string", "12?status=published" as unknown as number],
+  ])("refuses the unit id %s without a request", async (_label, unitId) => {
+    const fetchMock = stubFetch(jsonResponse({ data: {} }));
+
+    expect(() => getUnitExercises(unitId)).toThrow(TypeError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an unknown type", { type: "banana" }],
+    ["an unknown status", { status: "banana" }],
+  ])("refuses %s without a request", async (_label, filters) => {
+    const fetchMock = stubFetch(jsonResponse({ data: {} }));
+
+    expect(() => getUnitExercises(12, filters as never)).toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("getUnitExercises responses", () => {
+  it("returns the parsed unit and exercises", async () => {
+    stubFetch(jsonResponse({ data: validUnitExercisesResponse.data }));
+
+    const data = await getUnitExercises(12);
+
+    expect(data.unit.title).toBe("İlk ve Orta Çağlarda Türk Dünyası");
+    expect(data.exercises).toHaveLength(5);
+    expect(data.exercises[0]?.stats.correct_rate).toBeNull();
+  });
+
+  it("strips additive unknown fields", async () => {
+    stubFetch(
+      jsonResponse({
+        data: {
+          unit: validUnitExercisesResponse.data.unit,
+          exercises: [
+            { ...validUnitExercisesResponse.data.exercises[0], media: null },
+          ],
+        },
+      }),
+    );
+
+    const data = await getUnitExercises(12);
+
+    expect(data.exercises[0]).not.toHaveProperty("media");
+  });
+
+  it.each([
+    ["not_found", 404],
+    ["authorization", 403],
+  ] as const)("passes a %s error through", async (kind, status) => {
+    stubFetch(jsonResponse({ error: { kind, status, message: "x" } }, status));
+
+    await expect(getUnitExercises(12)).rejects.toMatchObject({ kind, status });
+  });
+
+  it("rejects with a contract error when the payload is malformed", async () => {
+    stubFetch(jsonResponse({ data: { unit: { id: 1 } } }));
+
+    await expect(getUnitExercises(12)).rejects.toMatchObject({
+      kind: "contract",
+    });
+  });
+
+  it("rejects with a network error when the request cannot be made", async () => {
+    stubFetch(new TypeError("fetch failed"));
+
+    await expect(getUnitExercises(12)).rejects.toMatchObject({
+      kind: "network",
+    });
   });
 });

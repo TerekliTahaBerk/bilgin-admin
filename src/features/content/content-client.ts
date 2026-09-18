@@ -2,10 +2,16 @@ import { z } from "zod";
 
 import {
   coursesResponseSchema,
+  unitExercisesResponseSchema,
   unitsResponseSchema,
   type Course,
   type Unit,
+  type UnitExercisesData,
 } from "@/contracts/admin/content";
+import {
+  buildExerciseQuery,
+  type ExerciseServerFilters,
+} from "@/features/content/exercise-filters";
 import { apiErrorKinds, type ApiError } from "@/lib/api/error";
 import { requireResourceId } from "@/lib/api/resource-id";
 
@@ -27,6 +33,7 @@ const resourceErrorSchema = z.object({
 // against the same frontend-owned contract as any other response.
 const coursesPayloadSchema = coursesResponseSchema.pick({ data: true });
 const unitsPayloadSchema = unitsResponseSchema.pick({ data: true });
+const exercisesPayloadSchema = unitExercisesResponseSchema.pick({ data: true });
 
 const networkError: ApiError = {
   kind: "network",
@@ -128,6 +135,31 @@ export function getCourseUnits(
     path,
     (body) => {
       const parsed = unitsPayloadSchema.safeParse(body);
+
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+    options,
+  );
+}
+
+/**
+ * `filters` carries only the two server-applied parameters — topic and
+ * difficulty are client-side and deliberately absent from this signature, so
+ * they cannot cause a request.
+ */
+export function getUnitExercises(
+  unitId: number,
+  filters: ExerciseServerFilters = {},
+  options: { signal?: AbortSignal } = {},
+): Promise<UnitExercisesData> {
+  const path = `/api/admin/units/${requireResourceId(unitId)}/exercises${buildExerciseQuery(filters)}`;
+
+  return requestResource(
+    path,
+    (body) => {
+      const parsed = exercisesPayloadSchema.safeParse(body);
 
       return parsed.success
         ? { success: true, data: parsed.data.data }

@@ -10,6 +10,10 @@ import {
 } from "@/lib/api/error";
 import { normalizeHttpError } from "@/lib/api/normalize-error";
 import { parseContract } from "@/lib/api/parse-contract";
+import {
+  buildExerciseQuery,
+  type ExerciseServerFilters,
+} from "@/features/content/exercise-filters";
 import { requireResourceId } from "@/lib/api/resource-id";
 import { serverEnv } from "@/lib/env/server";
 
@@ -17,6 +21,7 @@ export const ADMIN_LOGIN_TIMEOUT_MS = 15_000;
 export const ADMIN_ME_TIMEOUT_MS = 10_000;
 export const ADMIN_COURSES_TIMEOUT_MS = 10_000;
 export const ADMIN_UNITS_TIMEOUT_MS = 10_000;
+export const ADMIN_EXERCISES_TIMEOUT_MS = 10_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -42,6 +47,12 @@ const ADMIN_BACKEND_ENDPOINTS = {
     path: (courseId: number) => `/api/admin/v1/courses/${courseId}/units`,
     timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
   },
+  exercises: {
+    method: "GET",
+    path: (unitId: number, query: string) =>
+      `/api/admin/v1/units/${unitId}/exercises${query}`,
+    timeoutMs: ADMIN_EXERCISES_TIMEOUT_MS,
+  },
 } as const;
 
 export type BackendResult<Value> =
@@ -65,6 +76,13 @@ type AdminBackendRequest =
   | Readonly<{
       operation: "units";
       courseId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "exercises";
+      unitId: number;
+      filters: ExerciseServerFilters;
       backendToken: string;
       signal?: AbortSignal;
     }>;
@@ -113,6 +131,14 @@ function endpointPath(request: AdminBackendRequest): string {
     // Validated again here: the path is built from a number, never a string.
     return ADMIN_BACKEND_ENDPOINTS.units.path(
       requireResourceId(request.courseId),
+    );
+  }
+
+  if (request.operation === "exercises") {
+    // Path from a validated number, query from validated enum members only.
+    return ADMIN_BACKEND_ENDPOINTS.exercises.path(
+      requireResourceId(request.unitId),
+      buildExerciseQuery(request.filters),
     );
   }
 
