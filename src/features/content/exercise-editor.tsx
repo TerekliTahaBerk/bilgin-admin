@@ -644,9 +644,24 @@ export function ExerciseEditor({
         </div>
       )}
 
+      {/*
+       * method="post" is a security fallback, not a second mutation path. A
+       * form without an explicit method submits natively with GET, so a submit
+       * that lands before React hydrates (or with JavaScript disabled or
+       * broken) would serialise every field — stem, option texts,
+       * correctOptionId, explanation — into the URL query string, and from
+       * there into history, referrers and access logs. POST keeps the answer
+       * key in the request body; the page route does not handle POST, so the
+       * native submit simply fails instead of leaking.
+       *
+       * Once hydrated, handleFormSubmit preventDefaults and the normal
+       * react-hook-form -> createExercise/updateExercise -> same-origin JSON
+       * BFF flow runs unchanged.
+       */}
       <form
         aria-busy={isPending}
         className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)]"
+        method="post"
         onSubmit={handleFormSubmit}
       >
         <div className="space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
