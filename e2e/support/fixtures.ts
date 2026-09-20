@@ -9,6 +9,40 @@ export const E2E_SESSION_SECRET =
   "e2e-session-secret-that-is-at-least-32-characters-long";
 export const E2E_SESSION_COOKIE = "bilgin_admin_session";
 
+export const E2E_MOCK_BACKEND_URL = `http://127.0.0.1:${E2E_MOCK_BACKEND_PORT}`;
+
+/**
+ * Restores the mock backend to its pristine fixture snapshot.
+ *
+ * The mock is a single process shared by every spec file, so a mutation test
+ * (unit create, archive, import, curriculum PUT, admin create) leaves state
+ * behind that a later test would read as product truth. `workers: 1` does not
+ * help — the pollution lives in the process, not in parallelism. Each test
+ * calls this before signing in so what it asserts is the fixture, not the
+ * residue of whichever spec happened to run first.
+ *
+ * This talks to the mock directly and never through the app or its BFF: the
+ * reset route exists only inside e2e/support/mock-backend.mjs.
+ */
+/**
+ * Test-only bearer accepted by the mock backend for the super-admin fixture.
+ * It never reaches a browser: only Node-side specs that talk to the mock
+ * directly use it, and the app's own token stays server-side in the BFF.
+ */
+export const E2E_MOCK_SUPER_ADMIN_TOKEN = "test-e2e-super-admin-token";
+
+export async function resetMockBackend(): Promise<void> {
+  const response = await fetch(`${E2E_MOCK_BACKEND_URL}/__e2e/reset`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Mock backend reset failed with ${response.status}; tests would run against polluted state.`,
+    );
+  }
+}
+
 // Test-only credentials served by e2e/support/mock-backend.mjs.
 export const E2E_EMAIL = "editor@bilgin.test";
 export const E2E_PASSWORD = "test-password";

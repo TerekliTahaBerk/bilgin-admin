@@ -7,7 +7,19 @@ import {
   E2E_PASSWORD,
   E2E_REVIEWER_EMAIL,
   E2E_UNIT_WITH_EXERCISES_ID,
+  resetMockBackend,
 } from "./support/fixtures";
+
+/*
+ | Every test starts from the pristine mock fixture.
+ |
+ | The mock backend is one process shared by the whole suite, so a mutation
+ | test leaves state that a later test would otherwise read as product truth.
+ | This runs before sign-in, so the session is established against clean data.
+ */
+test.beforeEach(async () => {
+  await resetMockBackend();
+});
 
 const LIST_PATH = `/courses/${E2E_COURSE_WITH_UNITS_ID}/units/${E2E_UNIT_WITH_EXERCISES_ID}`;
 const NUMERIC_NEW_PATH = `${LIST_PATH}/exercises/new?type=numeric_input`;

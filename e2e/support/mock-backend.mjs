@@ -100,7 +100,7 @@ const COURSES = [
 ];
 
 /** Units per course id. Course 2 deliberately has none. */
-const UNITS = {
+const UNITS_SEED = {
   1: [
     {
       id: 11,
@@ -166,7 +166,7 @@ const UNITS = {
 };
 
 /** Exercises per unit id, covering types, statuses, difficulties and stats. */
-const EXERCISES = {
+const EXERCISES_SEED = {
   11: [
     {
       id: 101,
@@ -326,7 +326,7 @@ const EXERCISES = {
  * Nodes per unit id. The ids matter: the panel can only ask for a readiness
  * preview once it has read them here.
  */
-const UNIT_NODES = {
+const UNIT_NODES_SEED = {
   11: [
     {
       id: 1101,
@@ -411,7 +411,7 @@ const UNIT_NODES = {
 };
 
 /** One selection-rule dry run per node id, exactly as the backend reports it. */
-const NODE_PREVIEWS = {
+const NODE_PREVIEWS_SEED = {
   1101: { required: 6, available: 9, relaxed: false },
   1102: { required: 4, available: 4, relaxed: true },
   1301: { required: 5, available: 5, relaxed: false },
@@ -511,7 +511,7 @@ const TOPICS = {
   },
 };
 
-const EXERCISE_DETAILS = {
+const EXERCISE_DETAILS_SEED = {
   101: {
     id: 101,
     type: "multiple_choice",
@@ -789,8 +789,11 @@ function answerKeyChanged(current, next) {
   return current.correct_option_id !== next.correct_option_id;
 }
 
-let nextExerciseId = 201;
-let nextUnitId = 41;
+const FIRST_EXERCISE_ID = 201;
+const FIRST_UNIT_ID = 41;
+
+let nextExerciseId = FIRST_EXERCISE_ID;
+let nextUnitId = FIRST_UNIT_ID;
 
 const UNIT_TEMPLATES = [
   {
@@ -833,7 +836,7 @@ const CURRICULUM_OPTIONS = {
   ],
 };
 
-let curriculumRows = [
+const CURRICULUM_ROWS_SEED = [
   {
     course_id: 1,
     code: "tyt_turkce",
@@ -865,7 +868,7 @@ const ROLE_OPTIONS = [
     abilities: REVIEWER.abilities,
   },
 ];
-const ADMIN_ACCOUNTS = [
+const ADMIN_ACCOUNTS_SEED = [
   {
     ...SUPER_ADMIN,
     role_label: SUPER_ADMIN.role_label,
@@ -883,11 +886,76 @@ const ADMIN_ACCOUNTS = [
   },
 ];
 
-const UNIT_TITLES = Object.fromEntries(
-  Object.values(UNITS)
-    .flat()
-    .map((unit) => [unit.id, unit.title]),
-);
+/*
+ | TEST-ONLY DURUM SIFIRLAMA
+ |
+ | Bu süreç tüm spec dosyaları boyunca yaşıyor; mutasyon testleri (ünite
+ | oluştur, arşivle, içe aktar, müfredat PUT, yönetici POST/PATCH) aynı
+ | nesneleri kalıcı olarak değiştiriyordu. workers:1 bunu çözmez — sıra
+ | bağımlılığı sürecin kendisinde. Bu yüzden her test kendi temiz
+ | anlık görüntüsüyle başlar.
+ |
+ | Fabrikalar structuredClone kullanıyor: tohuma REFERANS döndürseydik ilk
+ | mutasyon tohumu da bozar ve ikinci reset baştaki hâli geri getiremezdi.
+ */
+
+function createInitialUnits() {
+  return structuredClone(UNITS_SEED);
+}
+
+function createInitialExercises() {
+  return structuredClone(EXERCISES_SEED);
+}
+
+function createInitialUnitNodes() {
+  return structuredClone(UNIT_NODES_SEED);
+}
+
+function createInitialNodePreviews() {
+  return structuredClone(NODE_PREVIEWS_SEED);
+}
+
+function createInitialExerciseDetails() {
+  return structuredClone(EXERCISE_DETAILS_SEED);
+}
+
+function createInitialCurriculum() {
+  return structuredClone(CURRICULUM_ROWS_SEED);
+}
+
+function createInitialAdmins() {
+  return structuredClone(ADMIN_ACCOUNTS_SEED);
+}
+
+function deriveUnitTitles(units) {
+  return Object.fromEntries(
+    Object.values(units)
+      .flat()
+      .map((unit) => [unit.id, unit.title]),
+  );
+}
+
+let UNITS = createInitialUnits();
+let EXERCISES = createInitialExercises();
+let UNIT_NODES = createInitialUnitNodes();
+let NODE_PREVIEWS = createInitialNodePreviews();
+let EXERCISE_DETAILS = createInitialExerciseDetails();
+let curriculumRows = createInitialCurriculum();
+let ADMIN_ACCOUNTS = createInitialAdmins();
+let UNIT_TITLES = deriveUnitTitles(UNITS);
+
+function resetState() {
+  UNITS = createInitialUnits();
+  EXERCISES = createInitialExercises();
+  UNIT_NODES = createInitialUnitNodes();
+  NODE_PREVIEWS = createInitialNodePreviews();
+  EXERCISE_DETAILS = createInitialExerciseDetails();
+  curriculumRows = createInitialCurriculum();
+  ADMIN_ACCOUNTS = createInitialAdmins();
+  UNIT_TITLES = deriveUnitTitles(UNITS);
+  nextExerciseId = FIRST_EXERCISE_ID;
+  nextUnitId = FIRST_UNIT_ID;
+}
 
 function send(response, status, body) {
   const payload = body === null ? "" : JSON.stringify(body);
@@ -930,6 +998,18 @@ function readBody(request) {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://127.0.0.1:${PORT}`);
+
+  /*
+   | TEST-ONLY. Gerçek panelin ya da BFF'in bir ucu DEĞİL: yalnızca bu mock
+   | süreci tanır ve production kodunda karşılığı yoktur. Playwright her
+   | testten önce çağırır, böylece her test aynı temiz fixture'la başlar.
+   */
+  if (request.method === "POST" && url.pathname === "/__e2e/reset") {
+    resetState();
+    send(response, 200, { reset: true });
+
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/health") {
     send(response, 200, { status: "ok" });
