@@ -7,10 +7,27 @@ import {
   E2E_EMAIL,
   E2E_MISSING_COURSE_ID,
   E2E_PASSWORD,
+  E2E_REVIEWER_EMAIL,
   E2E_UNITS,
+  resetMockBackend,
 } from "./support/fixtures";
 
+/*
+ | Every test starts from the pristine mock fixture.
+ |
+ | The mock backend is one process shared by the whole suite, so a mutation
+ | test leaves state that a later test would otherwise read as product truth.
+ | This runs before sign-in, so the session is established against clean data.
+ */
+test.beforeEach(async () => {
+  await resetMockBackend();
+});
+
 async function signIn(page: Page) {
+  await signInAs(page, E2E_EMAIL);
+}
+
+async function signInAs(page: Page, email: string) {
   await page.goto("/login");
   await page.waitForFunction(() => {
     const form = document.querySelector("form");
@@ -20,7 +37,7 @@ async function signIn(page: Page) {
       Object.keys(form).some((key) => key.startsWith("__react"))
     );
   });
-  await page.getByLabel("E-posta").fill(E2E_EMAIL);
+  await page.getByLabel("E-posta").fill(email);
   await page.getByLabel("Şifre").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: /giriş/i }).click();
   await expect(page).toHaveURL(`${E2E_BASE_URL}/`);
@@ -79,24 +96,14 @@ test("renders the real unit data for a course", async ({ page }) => {
   await expect(page.getByText("Soru bekliyor")).toHaveCount(1);
 });
 
-test("offers no publish, create or exercise navigation yet", async ({
+test("links each unit to its exercise list and offers unit creation to editors", async ({
   page,
 }) => {
   await signIn(page);
   await page.goto(`/courses/${E2E_COURSE_WITH_UNITS_ID}`);
   await expect(page.getByText("Tarih ve Zaman")).toBeVisible();
 
-  for (const absent of [
-    "Yayınla",
-    "Ünite Oluştur",
-    "Soruları gör",
-    "Yeni Soru",
-    "İçe Aktar",
-  ]) {
-    await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
-  }
-
-  // Rows now link to their exercise list; no buttons anywhere.
+  // Rows are navigation: each one opens that unit's exercise list.
   const hrefs = await page
     .locator("main a")
     .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
@@ -105,14 +112,37 @@ test("offers no publish, create or exercise navigation yet", async ({
   expect(
     hrefs
       .slice(1)
+      .filter(
+        (href) => href !== `/courses/${E2E_COURSE_WITH_UNITS_ID}/units/new`,
+      )
       .every((href) =>
         new RegExp(`^/courses/${E2E_COURSE_WITH_UNITS_ID}/units/\\d+$`).test(
           href ?? "",
         ),
       ),
   ).toBe(true);
-  await expect(page.locator("main li button")).toHaveCount(0);
-  await expect(page.locator("main button")).toHaveCount(0);
+
+  // edit_content: creating a unit starts here.
+  await expect(
+    page.getByRole("link", { name: "Yeni ünite", exact: true }),
+  ).toBeVisible();
+
+  /*
+   | Publishing is deliberately NOT on this screen. It needs a unit's node
+   | readiness, which only the unit detail page has read; a publish button
+   | here would be a button with nothing to check.
+   */
+  await expect(page.getByText("Yayınla", { exact: false })).toHaveCount(0);
+});
+
+test("hides unit creation from an admin without edit_content", async ({
+  page,
+}) => {
+  await signInAs(page, E2E_REVIEWER_EMAIL);
+  await page.goto(`/courses/${E2E_COURSE_WITH_UNITS_ID}`);
+  await expect(page.getByText("Tarih ve Zaman")).toBeVisible();
+
+  await expect(page.getByRole("link", { name: "Yeni ünite" })).toHaveCount(0);
 });
 
 test("opens a unit list directly by deep link", async ({ page }) => {
@@ -134,7 +164,16 @@ test("shows an empty state for a course with no units", async ({ page }) => {
   await expect(
     page.getByText("Bu derste henüz ünite bulunmuyor."),
   ).toBeVisible();
-  await expect(page.getByText("Ünite Oluştur")).toHaveCount(0);
+
+  /*
+   | An empty course is exactly when creating a unit is useful, so the action
+   | stays. This also pins the per-test mock reset: an earlier spec creates a
+   | unit in this same course, and without the reset the course is not empty
+   | by the time this test runs.
+   */
+  await expect(
+    page.getByRole("link", { name: "Yeni ünite", exact: true }),
+  ).toBeVisible();
 });
 
 test("keeps the session when a course does not exist", async ({ page }) => {

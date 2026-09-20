@@ -58,6 +58,12 @@ vi.mock("@/features/content/content-client", () => ({
   publishUnit: () => Promise.reject(new Error("not used in this suite")),
 }));
 
+const archiveExercise = vi.fn<(exerciseId: number) => Promise<unknown>>();
+
+vi.mock("@/features/workflows/workflow-client", () => ({
+  archiveExercise: (exerciseId: number) => archiveExercise(exerciseId),
+}));
+
 const { ExercisesBrowser } =
   await import("@/features/content/exercises-browser");
 
@@ -133,6 +139,7 @@ beforeEach(() => {
     .mockResolvedValue(passingPreviewResponse.data as NodePreview);
   replace.mockReset();
   refresh.mockReset();
+  archiveExercise.mockReset().mockResolvedValue({ id: 1, status: "archived" });
   onFiltersChange.mockReset();
   onClearFilters.mockReset();
 });
@@ -696,5 +703,75 @@ describe("ExercisesBrowser is read-only", () => {
     expect(
       screen.getAllByRole("link").map((link) => link.getAttribute("href")),
     ).toEqual([`/courses/${COURSE_ID}`]);
+  });
+});
+
+describe("ExercisesBrowser archiving", () => {
+  /*
+   | A failed archive must not be silent.
+   |
+   | The optimistic-looking part of this flow is the button label flipping back
+   | from "Arşivleniyor…": without a visible error that is indistinguishable
+   | from a question that simply refuses to archive, and the editor has no
+   | reason to retry or escalate.
+   */
+  it("surfaces a failed archive as an accessible alert", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    archiveExercise.mockRejectedValue(
+      Object.assign(new Error("Sunucuya ulaşılamadı."), { kind: "network" }),
+    );
+
+    renderBrowser({}, true);
+
+    const button = (
+      await screen.findAllByRole("button", { name: "Arşivle" })
+    )[0]!;
+    await user.click(button);
+
+    const alert = await screen.findByRole("alert");
+
+    expect(alert.textContent).toMatch(/Soru arşivlenemedi/);
+    expect(alert.textContent).toMatch(/Sunucuya ulaşılamadı/);
+  });
+
+  it("shows no alert when archiving succeeds", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderBrowser({}, true);
+
+    const button = (
+      await screen.findAllByRole("button", { name: "Arşivle" })
+    )[0]!;
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(archiveExercise).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.queryByText(/Soru arşivlenemedi/)).toBeNull();
+  });
+
+  it("asks for confirmation that explains what archiving preserves", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderBrowser({}, true);
+
+    const button = (
+      await screen.findAllByRole("button", { name: "Arşivle" })
+    )[0]!;
+    await user.click(button);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+
+    const message = confirm.mock.calls[0]![0] as string;
+
+    expect(message).toMatch(/Yeni oturumlar/);
+    expect(message).toMatch(/geçmiş kayıtları korunur/);
+
+    // Declining must not call the backend.
+    expect(archiveExercise).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,19 @@ import {
   E2E_PUBLISHABLE_UNIT_ID,
   E2E_PUBLISH_COURSE_ID,
   E2E_REVIEWER_EMAIL,
+  resetMockBackend,
 } from "./support/fixtures";
+
+/*
+ | Every test starts from the pristine mock fixture.
+ |
+ | The mock backend is one process shared by the whole suite, so a mutation
+ | test leaves state that a later test would otherwise read as product truth.
+ | This runs before sign-in, so the session is established against clean data.
+ */
+test.beforeEach(async () => {
+  await resetMockBackend();
+});
 
 const READY_PATH = `/courses/${E2E_PUBLISH_COURSE_ID}/units/${E2E_PUBLISHABLE_UNIT_ID}`;
 const BLOCKED_PATH = `/courses/${E2E_PUBLISH_COURSE_ID}/units/${E2E_BLOCKED_UNIT_ID}`;

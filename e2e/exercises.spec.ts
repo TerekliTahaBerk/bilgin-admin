@@ -9,7 +9,19 @@ import {
   E2E_PASSWORD,
   E2E_UNIT_WITHOUT_EXERCISES_ID,
   E2E_UNIT_WITH_EXERCISES_ID,
+  resetMockBackend,
 } from "./support/fixtures";
+
+/*
+ | Every test starts from the pristine mock fixture.
+ |
+ | The mock backend is one process shared by the whole suite, so a mutation
+ | test leaves state that a later test would otherwise read as product truth.
+ | This runs before sign-in, so the session is established against clean data.
+ */
+test.beforeEach(async () => {
+  await resetMockBackend();
+});
 
 const EXERCISES_PATH = `/courses/${E2E_COURSE_WITH_UNITS_ID}/units/${E2E_UNIT_WITH_EXERCISES_ID}`;
 
@@ -181,7 +193,9 @@ test("keeps the session when the unit does not exist", async ({ page }) => {
   );
 });
 
-test("offers only the supported editor actions", async ({ page }) => {
+test("offers the create, edit and archive actions each row supports", async ({
+  page,
+}) => {
   await signIn(page);
   await page.goto(EXERCISES_PATH);
   await expect(rows(page)).toHaveCount(5);
@@ -203,15 +217,51 @@ test("offers only the supported editor actions", async ({ page }) => {
     ).toBeVisible();
   }
   await expect(createGroup.getByRole("link")).toHaveCount(8);
-  // The seeded rows cover four editable types; only image_hotspot stays
-  // read-only, because there is no media infrastructure to edit it with.
-  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(4);
 
-  for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
+  /*
+   | Per-row semantics, not a global count.
+   |
+   | Two independent rules decide a row's actions: "Düzenle" needs a type this
+   | panel has an editor for, "Arşivle" needs the row not to be archived
+   | already. Archiving is type-agnostic on purpose — the backend archives by
+   | id, so a question this panel cannot edit can still be retired.
+   */
+  const row = (text: string) => rows(page).filter({ hasText: text });
+
+  // Editable and live: both actions.
+  for (const text of [
+    "Orhun Yazıtları",
+    "Uygurlar yerleşik",
+    "Yazısız hukuk",
+  ]) {
+    await expect(row(text).getByRole("link", { name: "Düzenle" })).toHaveCount(
+      1,
+    );
+    await expect(
+      row(text).getByRole("button", { name: "Arşivle" }),
+    ).toHaveCount(1);
+  }
+
+  // Already archived: still editable, but not archivable a second time.
+  const archived = row("Kavramı karşılığıyla");
+  await expect(archived.getByRole("link", { name: "Düzenle" })).toHaveCount(1);
+  await expect(archived.getByRole("button", { name: "Arşivle" })).toHaveCount(
+    0,
+  );
+
+  // Media type with no editor: archive only.
+  const media = row("(önizleme yok)");
+  await expect(media.getByRole("link", { name: "Düzenle" })).toHaveCount(0);
+  await expect(media.getByRole("button", { name: "Arşivle" })).toHaveCount(1);
+
+  // Four editable types, four non-archived rows.
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Arşivle" })).toHaveCount(4);
+
+  // Publishing and saving belong to other screens, not the exercise list.
+  for (const absent of ["Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-  await expect(rows(page).locator("a")).toHaveCount(4);
-  await expect(rows(page).locator("button")).toHaveCount(0);
 });
 
 test("fits a phone viewport without horizontal overflow", async ({ page }) => {

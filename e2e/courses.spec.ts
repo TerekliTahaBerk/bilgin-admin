@@ -5,7 +5,19 @@ import {
   E2E_COURSES,
   E2E_EMAIL,
   E2E_PASSWORD,
+  resetMockBackend,
 } from "./support/fixtures";
+
+/*
+ | Every test starts from the pristine mock fixture.
+ |
+ | The mock backend is one process shared by the whole suite, so a mutation
+ | test leaves state that a later test would otherwise read as product truth.
+ | This runs before sign-in, so the session is established against clean data.
+ */
+test.beforeEach(async () => {
+  await resetMockBackend();
+});
 
 async function signIn(page: Page) {
   await page.goto("/login");
