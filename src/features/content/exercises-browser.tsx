@@ -481,6 +481,23 @@ export function ExercisesBrowser({
               </div>
             </dl>
 
+            {archiveMutation.isError ? (
+              /*
+               | A failed archive used to be silent: the button simply stopped
+               | saying "Arşivleniyor…" and the row stayed put, which reads
+               | exactly like a question that refuses to archive for no reason.
+               | The row itself is the wrong place for this — the list refetches
+               | and remounts rows — so the notice sits above the list and stays
+               | until the next attempt.
+               */
+              <p
+                className="mt-4 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger"
+                role="alert"
+              >
+                Soru arşivlenemedi. {archiveMutation.error.message}
+              </p>
+            ) : null}
+
             <ul
               aria-label="Sorular"
               className="divide-y divide-border rounded-lg border border-border bg-surface"
