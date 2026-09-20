@@ -123,15 +123,28 @@ const UNITS = {
   ],
   2: [],
   3: [
+    // The publication playground: unit 31 is ready to publish, unit 32 is
+    // blocked. Kept out of course 1 so the M0–M3 assertions about that
+    // course's units stay exactly as they were.
     {
       id: 31,
       title: "Vektörler",
       sort_order: 1,
       grade_level: 11,
-      status: "archived",
+      status: "draft",
       access: "premium",
       node_count: 3,
       exercise_count: 7,
+    },
+    {
+      id: 32,
+      title: "Dalgalar",
+      sort_order: 2,
+      grade_level: 11,
+      status: "draft",
+      access: "free",
+      node_count: 2,
+      exercise_count: 1,
     },
   ],
   4: [],
@@ -291,7 +304,148 @@ const EXERCISES = {
     },
   ],
   31: [],
+  32: [],
 };
+
+/**
+ * Nodes per unit id. The ids matter: the panel can only ask for a readiness
+ * preview once it has read them here.
+ */
+const UNIT_NODES = {
+  11: [
+    {
+      id: 1101,
+      title: "Çalışma 1",
+      type: "study",
+      difficulty: "kolay",
+      sort_order: 1,
+      exercise_count: 6,
+      status: "published",
+    },
+    {
+      id: 1102,
+      title: "Kavramları Eşleştir",
+      type: "matching",
+      difficulty: "orta",
+      sort_order: 2,
+      exercise_count: 4,
+      status: "published",
+    },
+  ],
+  12: [],
+  13: [
+    {
+      id: 1301,
+      title: "Çalışma 1",
+      type: "study",
+      difficulty: "kolay",
+      sort_order: 1,
+      exercise_count: 5,
+      status: "draft",
+    },
+  ],
+  31: [
+    {
+      id: 3101,
+      title: "Çalışma 1",
+      type: "study",
+      difficulty: "kolay",
+      sort_order: 1,
+      exercise_count: 6,
+      status: "draft",
+    },
+    {
+      id: 3102,
+      title: "Hızlı Tekrar",
+      type: "quick_review",
+      difficulty: "kolay",
+      sort_order: 2,
+      exercise_count: 10,
+      status: "draft",
+    },
+    {
+      id: 3103,
+      title: "Ünite Challenge",
+      type: "unit_challenge",
+      difficulty: "zor",
+      sort_order: 3,
+      exercise_count: 10,
+      status: "draft",
+    },
+  ],
+  32: [
+    {
+      id: 3201,
+      title: "Çalışma 1",
+      type: "study",
+      difficulty: "kolay",
+      sort_order: 1,
+      exercise_count: 5,
+      status: "draft",
+    },
+    {
+      id: 3202,
+      title: "Mini Challenge",
+      type: "mini_challenge",
+      difficulty: "orta",
+      sort_order: 2,
+      exercise_count: 8,
+      status: "draft",
+    },
+  ],
+};
+
+/** One selection-rule dry run per node id, exactly as the backend reports it. */
+const NODE_PREVIEWS = {
+  1101: { required: 6, available: 9, relaxed: false },
+  1102: { required: 4, available: 4, relaxed: true },
+  1301: { required: 5, available: 5, relaxed: false },
+  3101: { required: 6, available: 11, relaxed: false },
+  3102: { required: 10, available: 10, relaxed: true },
+  3103: { required: 10, available: 12, relaxed: false },
+  // Unit 32's second step is short, so that unit can never be published.
+  3201: { required: 5, available: 7, relaxed: false },
+  3202: { required: 8, available: 2, relaxed: false },
+};
+
+function previewFor(node) {
+  const counts = NODE_PREVIEWS[node.id] ?? {
+    required: node.exercise_count,
+    available: 0,
+    relaxed: false,
+  };
+  const passes = counts.available >= counts.required;
+
+  return {
+    node_id: node.id,
+    node_title: node.title,
+    required: counts.required,
+    available: counts.available,
+    relaxed: counts.relaxed,
+    passes,
+    message: !passes
+      ? `Kural ${counts.available} soru getiriyor, ${counts.required} gerekiyor.`
+      : counts.relaxed
+        ? `Yeterli (${counts.available}/${counts.required}) — ancak zorluk filtresi gevşetilerek.`
+        : `Yeterli (${counts.available}/${counts.required}).`,
+  };
+}
+
+function findNode(nodeId) {
+  for (const nodes of Object.values(UNIT_NODES)) {
+    const node = nodes.find((candidate) => candidate.id === nodeId);
+
+    if (node !== undefined) return node;
+  }
+
+  return undefined;
+}
+
+function findUnit(unitId) {
+  return Object.values(UNITS)
+    .flat()
+    .find((unit) => unit.id === unitId);
+}
 
 const TOPICS = {
   1: {
@@ -714,6 +868,123 @@ const server = createServer(async (request, response) => {
     }
 
     send(response, 200, envelope(units));
+    return;
+  }
+
+  const nodesMatch = /^\/api\/admin\/v1\/units\/(\d+)\/nodes$/.exec(
+    url.pathname,
+  );
+
+  if (request.method === "GET" && nodesMatch !== null) {
+    if (adminForRequest(request) === null) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+
+    const unitId = Number(nodesMatch[1]);
+    const unit = findUnit(unitId);
+    const nodes = UNIT_NODES[unitId];
+
+    if (unit === undefined || nodes === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+
+    send(
+      response,
+      200,
+      envelope({
+        unit: { id: unit.id, title: unit.title, status: unit.status },
+        nodes,
+      }),
+    );
+    return;
+  }
+
+  const previewMatch =
+    /^\/api\/admin\/v1\/nodes\/(\d+)\/preview-selection$/.exec(url.pathname);
+
+  if (request.method === "GET" && previewMatch !== null) {
+    if (adminForRequest(request) === null) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+
+    const node = findNode(Number(previewMatch[1]));
+
+    if (node === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+
+    send(response, 200, envelope(previewFor(node)));
+    return;
+  }
+
+  const publishMatch = /^\/api\/admin\/v1\/units\/(\d+)\/publish$/.exec(
+    url.pathname,
+  );
+
+  if (request.method === "POST" && publishMatch !== null) {
+    // Publishing needs publish_content, which only the reviewer fixture has.
+    if (request.headers.authorization !== `Bearer ${REVIEWER_TOKEN}`) {
+      send(response, adminForRequest(request) === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+
+    const unitId = Number(publishMatch[1]);
+    const unit = findUnit(unitId);
+    const nodes = UNIT_NODES[unitId];
+
+    if (unit === undefined || nodes === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+
+    const blocking = nodes
+      .map((node) => previewFor(node))
+      .filter((report) => !report.passes)
+      .map((report) => ({
+        node_id: report.node_id,
+        node_title: report.node_title,
+        message: report.message,
+      }));
+
+    if (blocking.length > 0) {
+      send(response, 422, {
+        error: {
+          code: "CONTENT_NOT_PUBLISHABLE",
+          message: "Bazı adımlar yeterli soru getirmiyor.",
+          details: { blocking },
+        },
+      });
+      return;
+    }
+
+    unit.status = "published";
+
+    for (const node of nodes) {
+      node.status = "published";
+    }
+
+    // Archived questions stay archived — the backend excludes them on purpose.
+    for (const exercise of EXERCISES[unitId] ?? []) {
+      if (exercise.status !== "archived") {
+        exercise.status = "published";
+      }
+    }
+
+    send(
+      response,
+      200,
+      envelope({
+        id: unit.id,
+        status: "published",
+        published_nodes: nodes.length,
+      }),
+    );
     return;
   }
 

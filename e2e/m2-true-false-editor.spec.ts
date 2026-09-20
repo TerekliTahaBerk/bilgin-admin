@@ -156,7 +156,8 @@ test("keeps an unsupported stored type readable but not editable", async ({
   // image_hotspot stays listed and readable, with no edit link on its own row:
   // there is no media infrastructure to edit it with.
   const hotspotRow = page
-    .locator("main ul li")
+    .getByRole("list", { name: "Sorular" })
+    .locator("li")
     .filter({ hasText: "Görsel Bölge" });
   await expect(hotspotRow).toHaveCount(1);
   await expect(hotspotRow.getByRole("link", { name: "Düzenle" })).toHaveCount(
@@ -179,7 +180,9 @@ test("reviewer sees no true/false create or edit surface and is refused by the B
 
   // Earlier tests in this suite mutate the seeded previews, so assert the
   // list renders at all rather than pinning one row's text.
-  await expect(page.locator("main ul li").first()).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Sorular" }).locator("li").first(),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Doğru / yanlış" })).toHaveCount(
     0,
   );

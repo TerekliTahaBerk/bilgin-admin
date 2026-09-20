@@ -30,7 +30,9 @@ async function signIn(page: Page) {
 }
 
 function rows(page: Page) {
-  return page.locator("main ul li");
+  // Scoped by accessible name: the readiness block on this page has a list of
+  // its own, and an unscoped locator would count its steps as exercises.
+  return page.getByRole("list", { name: "Sorular" }).locator("li");
 }
 
 test("walks from the panel down to a unit's exercise list", async ({
@@ -208,8 +210,8 @@ test("offers only the supported editor actions", async ({ page }) => {
   for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-  await expect(page.locator("main ul li a")).toHaveCount(4);
-  await expect(page.locator("main ul li button")).toHaveCount(0);
+  await expect(rows(page).locator("a")).toHaveCount(4);
+  await expect(rows(page).locator("button")).toHaveCount(0);
 });
 
 test("fits a phone viewport without horizontal overflow", async ({ page }) => {

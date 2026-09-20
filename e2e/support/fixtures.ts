@@ -157,3 +157,11 @@ export const E2E_EXERCISES = [
     needsReview: false,
   },
 ] as const;
+
+/** Publication playground served by e2e/support/mock-backend.mjs. */
+export const E2E_PUBLISH_COURSE_ID = 3;
+/** Every step passes, so this unit can be published. */
+export const E2E_PUBLISHABLE_UNIT_ID = 31;
+/** One step is short of questions, so this unit can never be published. */
+export const E2E_BLOCKED_UNIT_ID = 32;
+export const E2E_BLOCKED_NODE_TITLE = "Mini Challenge";

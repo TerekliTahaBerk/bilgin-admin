@@ -27,6 +27,7 @@ export default async function UnitExercisesPage({
       <Suspense fallback={null}>
         <ExercisesPage
           canEdit={can(admin, "edit_content")}
+          canPublish={can(admin, "publish_content")}
           courseId={courseId}
           unitId={unitId}
         />

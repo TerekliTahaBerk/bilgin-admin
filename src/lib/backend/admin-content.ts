@@ -21,6 +21,14 @@ import {
   type UpdateExerciseResponse,
 } from "@/contracts/admin/exercise-editor";
 import {
+  nodePreviewResponseSchema,
+  publishUnitResponseSchema,
+  unitNodesResponseSchema,
+  type NodePreviewResponse,
+  type PublishUnitResponse,
+  type UnitNodesResponse,
+} from "@/contracts/admin/publication";
+import {
   requireExerciseFilters,
   type ExerciseServerFilters,
 } from "@/features/content/exercise-filters";
@@ -146,6 +154,59 @@ export const adminContent = Object.freeze({
         signal: options.signal,
       },
       createExerciseResponseSchema,
+    );
+  },
+
+  /**
+   * The unit's nodes. The node ids live only here, so a readiness preview can
+   * never be requested before this read has returned.
+   */
+  unitNodes(
+    unitId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<UnitNodesResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "unitNodes",
+        unitId: requireResourceId(unitId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      unitNodesResponseSchema,
+    );
+  },
+
+  nodePreview(
+    nodeId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<NodePreviewResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "nodePreview",
+        nodeId: requireResourceId(nodeId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      nodePreviewResponseSchema,
+    );
+  },
+
+  /** Publishing carries no request body: the unit id is the whole intent. */
+  publishUnit(
+    unitId: number,
+    backendToken: string,
+    options: BackendRequestOptions = {},
+  ): Promise<BackendResult<PublishUnitResponse>> {
+    return requestAdminBackend(
+      {
+        operation: "publishUnit",
+        unitId: requireResourceId(unitId),
+        backendToken: requireBackendToken(backendToken),
+        signal: options.signal,
+      },
+      publishUnitResponseSchema,
     );
   },
 

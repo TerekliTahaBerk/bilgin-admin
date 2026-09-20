@@ -7,12 +7,15 @@ import type {
   CourseTopicsData,
   ExerciseDetail,
 } from "@/contracts/admin/exercise-editor";
+import type { NodePreview, UnitNodesData } from "@/contracts/admin/publication";
 import {
   getCourseTopics,
   getCourses,
   getCourseUnits,
   getExerciseDetail,
+  getNodePreview,
   getUnitExercises,
+  getUnitNodes,
 } from "@/features/content/content-client";
 import type { ExerciseServerFilters } from "@/features/content/exercise-filters";
 
@@ -36,6 +39,17 @@ export function courseTopicsQueryKey(courseId: number) {
 export function exerciseDetailQueryKey(exerciseId: number) {
   return ["content", "exercises", exerciseId] as const;
 }
+
+export function unitNodesQueryKey(unitId: number) {
+  return ["content", "units", unitId, "nodes"] as const;
+}
+
+export function nodePreviewQueryKey(nodeId: number) {
+  return ["content", "nodes", nodeId, "preview"] as const;
+}
+
+/** Every node preview under one prefix, so publishing can drop them together. */
+export const nodePreviewQueryPrefix = ["content", "nodes"] as const;
 
 export function coursesQueryOptions() {
   return {
@@ -71,6 +85,30 @@ export function exerciseDetailQueryOptions(exerciseId: number) {
     queryFn: ({ signal }: { signal: AbortSignal }): Promise<ExerciseDetail> =>
       getExerciseDetail(exerciseId, { signal }),
     staleTime: CONTENT_STALE_TIME_MS,
+  };
+}
+
+export function unitNodesQueryOptions(unitId: number) {
+  return {
+    queryKey: unitNodesQueryKey(unitId),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<UnitNodesData> =>
+      getUnitNodes(unitId, { signal }),
+    staleTime: CONTENT_STALE_TIME_MS,
+  };
+}
+
+/**
+ * A readiness preview is a real pool query on the backend, so it is never
+ * polled and never refetched on window focus: it is recomputed when the
+ * editor asks for it or when publishing invalidates it.
+ */
+export function nodePreviewQueryOptions(nodeId: number) {
+  return {
+    queryKey: nodePreviewQueryKey(nodeId),
+    queryFn: ({ signal }: { signal: AbortSignal }): Promise<NodePreview> =>
+      getNodePreview(nodeId, { signal }),
+    staleTime: CONTENT_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
   };
 }
 

@@ -58,6 +58,33 @@ export async function readEditorBffSession(
   return result;
 }
 
+/**
+ * Publishing needs `publish_content`, never `edit_content`: the four-eyes rule
+ * exists so the author of a question cannot be the one who ships it. This is a
+ * UX guard only — the backend runs the same check and has the last word.
+ */
+export async function readPublisherBffSession(
+  request: NextRequest,
+): Promise<SessionResult> {
+  const result = await readBffSession(request);
+
+  if (!result.ok) return result;
+
+  if (!can(result.session.admin, "publish_content")) {
+    return {
+      ok: false,
+      response: createSessionErrorResponse({
+        kind: "authorization",
+        status: 403,
+        code: "FORBIDDEN",
+        message: "Yayınlama yetkiniz yok.",
+      }),
+    };
+  }
+
+  return result;
+}
+
 export function clearSessionForBackendAuthentication(): NextResponse {
   return clearedInvalidSessionResponse();
 }
