@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { countFillBlankPlaceholders } from "@/lib/content/fill-blank-placeholders";
+import { isExactIdPermutation } from "@/lib/content/structured-items";
 
 import { successEnvelopeSchema } from "@/contracts/admin/common";
 import {
@@ -134,6 +135,77 @@ export const flashcardAnswerKeyDetailSchema = z.object({
   self_assessed: z.boolean().optional(),
 });
 
+/**
+ * Backend Rules::idList() normalises a scalar id with PHP's (string) cast, so
+ * a stored 1 and a stored "1" are the same id there. Detail reads normalise
+ * the same way; everything downstream of this schema is a plain string.
+ */
+const structuredIdSchema = z
+  .union([z.string(), z.number(), z.boolean()])
+  .transform(String);
+
+export const structuredItemSchema = z.object({
+  id: structuredIdSchema,
+  // Empty text is backend-invalid but stays readable here: an author can only
+  // repair a degenerate row in the editor if the editor can open it.
+  text: z.string(),
+});
+
+export const matchingItemSchema = structuredItemSchema;
+
+export const matchingContentSchema = z.object({
+  // MatchingValidator never reads an instruction, but every real seed row
+  // carries one, so parsing and round-tripping it keeps an edit from silently
+  // deleting authored text.
+  instruction: z.string().optional(),
+  left: z.array(matchingItemSchema).min(1),
+  right: z.array(matchingItemSchema).min(1),
+});
+
+/**
+ * MatchingValidator does not look at partial_credit at all — but MatchingGrader
+ * reads `$exercise->key('partial_credit')` out of the answer key at scoring
+ * time and casts it with (bool), treating a missing value as false. It is
+ * therefore a real authoring field, and a stored row without one means "off".
+ */
+const phpBooleanSchema = z
+  .union([z.boolean(), z.number(), z.string()])
+  .transform((value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    return value !== "" && value !== "0";
+  });
+
+export const matchingAnswerKeyDetailSchema = z.object({
+  pairs: z.record(z.string(), structuredIdSchema),
+  partial_credit: phpBooleanSchema.default(false),
+});
+
+export const orderingItemSchema = structuredItemSchema;
+
+export const orderingContentSchema = z.object({
+  instruction: z.string(),
+  items: z.array(orderingItemSchema).min(1),
+});
+
+export const orderingAnswerKeySchema = z.object({
+  order: z.array(structuredIdSchema),
+});
+
+/**
+ * Word order is the same concept as ordering but keyed on `words`, and the two
+ * schemas stay separate precisely so a body carrying `content.items` can never
+ * be parsed — or serialised — as a valid word_order question.
+ */
+export const wordOrderContentSchema = z.object({
+  instruction: z.string(),
+  words: z.array(structuredItemSchema).min(1),
+});
+
+export const wordOrderAnswerKeySchema = z.object({
+  order: z.array(structuredIdSchema),
+});
+
 /** The exercise types this editor is allowed to create and update. */
 export const supportedEditorTypeSchema = z.enum([
   "multiple_choice",
@@ -141,6 +213,9 @@ export const supportedEditorTypeSchema = z.enum([
   "fill_blank",
   "numeric_input",
   "flashcard",
+  "matching",
+  "ordering",
+  "word_order",
 ]);
 
 export type SupportedEditorType = z.infer<typeof supportedEditorTypeSchema>;
@@ -191,11 +266,26 @@ const detailShapeByType = {
     answerKey: flashcardAnswerKeyDetailSchema,
     label: "Bilgi kartı",
   },
+  matching: {
+    content: matchingContentSchema,
+    answerKey: matchingAnswerKeyDetailSchema,
+    label: "Eşleştirme",
+  },
+  ordering: {
+    content: orderingContentSchema,
+    answerKey: orderingAnswerKeySchema,
+    label: "Sıralama",
+  },
+  word_order: {
+    content: wordOrderContentSchema,
+    answerKey: wordOrderAnswerKeySchema,
+    label: "Kelime sıralama",
+  },
 } as const;
 
 /**
  * All ten exercise types stay readable — an unsupported type must not become
- * an unreadable one — but the two types this editor can mutate are fully
+ * an unreadable one — but the eight types this editor can mutate are fully
  * validated, so the form never hydrates from a shape it cannot serialize back.
  */
 export const exerciseDetailDataSchema =
@@ -308,7 +398,7 @@ export const fillBlankEditableSchema = z
   });
 
 /**
- * Mutations accept exactly the supported editor union. The other eight types
+ * Mutations accept exactly the supported editor union. The other two types
  * fall through the discriminator and are rejected before any backend call, and
  * the object schemas strip id/status/version/stats/owner_course_id — plus
  * owner_unit_id on update — so a crafted browser body cannot mass-assign them.
@@ -342,12 +432,202 @@ export const flashcardEditableSchema = z.object({
   answer_key: z.object({}).transform(() => ({ self_assessed: true as const })),
 });
 
+/**
+ * Mutation-side item rules, mirroring Rules::idList(): a scalar-normalised,
+ * non-empty id and non-empty text. Unlike the detail schema these are strict —
+ * the editor always emits canonical strings, so anything else is a crafted
+ * body and is rejected before a backend call is made.
+ */
+const editableStructuredItemSchema = z.object({
+  id: z.string().trim().min(1, "Öğe kimliği boş olamaz."),
+  text: z.string().trim().min(1, "Öğe metni boş olamaz."),
+});
+
+function reportDuplicateIds(
+  items: readonly { id: string }[],
+  context: z.RefinementCtx,
+  path: (string | number)[],
+  message: string,
+): string[] {
+  const ids = items.map((item) => item.id);
+
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: "custom", path, message });
+  }
+
+  return ids;
+}
+
+/**
+ * MatchingValidator's own invariants, mirrored at the BFF boundary. Note what
+ * is deliberately absent: the backend does not require right-hand values to be
+ * unique, so two left items may legitimately point at the same right item and
+ * this schema must not invent a one-to-one restriction.
+ */
+export const matchingEditableSchema = z
+  .object({
+    type: z.literal("matching"),
+    ...commonEditableFields,
+    content: z.object({
+      instruction: z.string().optional(),
+      left: z
+        .array(editableStructuredItemSchema)
+        .min(2, "Sol sütunda en az iki öğe bulunmalıdır."),
+      right: z
+        .array(editableStructuredItemSchema)
+        .min(2, "Sağ sütunda en az iki öğe bulunmalıdır."),
+    }),
+    answer_key: z.object({
+      pairs: z.record(
+        z.string().trim().min(1),
+        z.string().trim().min(1, "Eşleşme hedefi boş olamaz."),
+      ),
+      // Always an explicit boolean: the grader reads it out of the answer key,
+      // so "missing" and "false" must never be the editor's problem.
+      partial_credit: z.boolean(),
+    }),
+  })
+  .superRefine((value, context) => {
+    const leftIds = reportDuplicateIds(
+      value.content.left,
+      context,
+      ["content", "left"],
+      "Sol sütun kimlikleri benzersiz olmalıdır.",
+    );
+    const rightIds = reportDuplicateIds(
+      value.content.right,
+      context,
+      ["content", "right"],
+      "Sağ sütun kimlikleri benzersiz olmalıdır.",
+    );
+
+    const pairs = value.answer_key.pairs;
+    const pairKeys = Object.keys(pairs);
+
+    if (pairKeys.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["answer_key", "pairs"],
+        message: "Eşleşme listesi boş olamaz.",
+      });
+      return;
+    }
+
+    for (const id of leftIds) {
+      if (!Object.hasOwn(pairs, id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["answer_key", "pairs", id],
+          message: `Sol sütundaki '${id}' için eşleşme seçilmemiş.`,
+        });
+      }
+    }
+
+    for (const [left, right] of Object.entries(pairs)) {
+      if (!leftIds.includes(left)) {
+        context.addIssue({
+          code: "custom",
+          path: ["answer_key", "pairs", left],
+          message: `Eşleşmede tanımsız sol öğe: '${left}'.`,
+        });
+      }
+
+      if (!rightIds.includes(right)) {
+        context.addIssue({
+          code: "custom",
+          path: ["answer_key", "pairs", left],
+          message: `Eşleşmede tanımsız sağ öğe: '${right}'.`,
+        });
+      }
+    }
+  });
+
+/**
+ * Shared by ordering and word order: the answer order must be an exact
+ * permutation of the content ids — Rules::requireExactOrder(). The two types
+ * keep separate schemas because their content key differs, so a `words` body
+ * can never satisfy `ordering` and vice versa.
+ */
+function refineExactOrder(
+  items: readonly { id: string }[],
+  order: readonly string[],
+  context: z.RefinementCtx,
+  contentPath: string,
+  duplicateMessage: string,
+) {
+  const ids = reportDuplicateIds(
+    items,
+    context,
+    ["content", contentPath],
+    duplicateMessage,
+  );
+
+  if (!isExactIdPermutation(order, ids)) {
+    context.addIssue({
+      code: "custom",
+      path: ["answer_key", "order"],
+      message: "Doğru sıra, öğelerin hepsini tam olarak bir kez içermeli.",
+    });
+  }
+}
+
+const editableOrderSchema = z.object({
+  order: z.array(z.string().trim().min(1, "Sıra öğesi boş olamaz.")),
+});
+
+export const orderingEditableSchema = z
+  .object({
+    type: z.literal("ordering"),
+    ...commonEditableFields,
+    content: z.object({
+      instruction: z.string().trim().min(1, "Yönerge boş olamaz."),
+      items: z
+        .array(editableStructuredItemSchema)
+        .min(2, "En az iki öğe bulunmalıdır."),
+    }),
+    answer_key: editableOrderSchema,
+  })
+  .superRefine((value, context) => {
+    refineExactOrder(
+      value.content.items,
+      value.answer_key.order,
+      context,
+      "items",
+      "Öğe kimlikleri benzersiz olmalıdır.",
+    );
+  });
+
+export const wordOrderEditableSchema = z
+  .object({
+    type: z.literal("word_order"),
+    ...commonEditableFields,
+    content: z.object({
+      instruction: z.string().trim().min(1, "Yönerge boş olamaz."),
+      words: z
+        .array(editableStructuredItemSchema)
+        .min(2, "En az iki kelime bulunmalıdır."),
+    }),
+    answer_key: editableOrderSchema,
+  })
+  .superRefine((value, context) => {
+    refineExactOrder(
+      value.content.words,
+      value.answer_key.order,
+      context,
+      "words",
+      "Kelime kimlikleri benzersiz olmalıdır.",
+    );
+  });
+
 export const editableExerciseSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema,
   trueFalseEditableSchema,
   fillBlankEditableSchema,
   numericInputEditableSchema,
   flashcardEditableSchema,
+  matchingEditableSchema,
+  orderingEditableSchema,
+  wordOrderEditableSchema,
 ]);
 
 export const createExerciseRequestSchema = z.discriminatedUnion("type", [
@@ -356,6 +636,9 @@ export const createExerciseRequestSchema = z.discriminatedUnion("type", [
   fillBlankEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   numericInputEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   flashcardEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  matchingEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  orderingEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  wordOrderEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
 ]);
 
 export const updateExerciseRequestSchema = editableExerciseSchema;
@@ -384,6 +667,9 @@ export type TrueFalseContent = z.infer<typeof trueFalseContentSchema>;
 export type FillBlankContent = z.infer<typeof fillBlankContentSchema>;
 export type NumericInputContent = z.infer<typeof numericInputContentSchema>;
 export type FlashcardContent = z.infer<typeof flashcardContentSchema>;
+export type MatchingContent = z.infer<typeof matchingContentSchema>;
+export type OrderingContent = z.infer<typeof orderingContentSchema>;
+export type WordOrderContent = z.infer<typeof wordOrderContentSchema>;
 export type EditableExercise = z.infer<typeof editableExerciseSchema>;
 export type ExerciseDetail = z.infer<typeof exerciseDetailDataSchema>;
 export type ExerciseDetailResponse = z.infer<

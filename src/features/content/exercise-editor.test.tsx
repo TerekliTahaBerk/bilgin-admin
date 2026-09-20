@@ -370,12 +370,13 @@ describe("multiple choice edit editor", () => {
   });
 
   it("renders a safe unsupported-type state without a mutation form", async () => {
-    // matching is not an M2 editor type; it stays readable but not editable.
+    // image_hotspot needs media infrastructure that does not exist yet; it
+    // stays readable but not editable.
     getExerciseDetail.mockResolvedValue({
       ...detail,
-      type: "matching",
-      content: { pairs: [{ left: "a", right: "b" }] },
-      answer_key: { pairs: [["a", "b"]] },
+      type: "image_hotspot",
+      content: { image_url: "/x.png", regions: [{ id: "a", shape: "rect" }] },
+      answer_key: { region_id: "a" },
     });
     renderEditor(101);
     expect(

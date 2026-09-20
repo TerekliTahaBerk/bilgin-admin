@@ -37,6 +37,27 @@ import {
   strictNumericInputBranchSchema,
 } from "@/features/content/numeric-input-form";
 import {
+  createMatchingBranch,
+  matchingBranchFromDetail,
+  matchingBranchSchema,
+  serializeMatchingBranch,
+  strictMatchingBranchSchema,
+} from "@/features/content/matching-form";
+import {
+  createOrderingBranch,
+  orderingBranchFromDetail,
+  orderingBranchSchema,
+  serializeOrderingBranch,
+  strictOrderingBranchSchema,
+} from "@/features/content/ordering-form";
+import {
+  createWordOrderBranch,
+  serializeWordOrderBranch,
+  strictWordOrderBranchSchema,
+  wordOrderBranchFromDetail,
+  wordOrderBranchSchema,
+} from "@/features/content/word-order-form";
+import {
   createTrueFalseBranch,
   serializeTrueFalseBranch,
   strictTrueFalseBranchSchema,
@@ -50,6 +71,9 @@ export const editorTypeLabels: Record<SupportedEditorType, string> = {
   fill_blank: "Boşluk doldurma",
   numeric_input: "Sayısal cevap",
   flashcard: "Bilgi kartı",
+  matching: "Eşleştirme",
+  ordering: "Sıralama",
+  word_order: "Kelime sıralama",
 };
 
 export const editorTypeHeadings: Record<
@@ -75,6 +99,18 @@ export const editorTypeHeadings: Record<
   flashcard: {
     create: "Yeni bilgi kartı",
     edit: "Bilgi kartını düzenle",
+  },
+  matching: {
+    create: "Yeni eşleştirme sorusu",
+    edit: "Eşleştirme sorusunu düzenle",
+  },
+  ordering: {
+    create: "Yeni sıralama sorusu",
+    edit: "Sıralama sorusunu düzenle",
+  },
+  word_order: {
+    create: "Yeni kelime sıralama sorusu",
+    edit: "Kelime sıralama sorusunu düzenle",
   },
 };
 
@@ -103,6 +139,9 @@ const branchKeyByType = {
   fill_blank: "fillBlank",
   numeric_input: "numericInput",
   flashcard: "flashcard",
+  matching: "matching",
+  ordering: "ordering",
+  word_order: "wordOrder",
 } as const;
 
 const strictBranchByType = {
@@ -111,10 +150,13 @@ const strictBranchByType = {
   fill_blank: strictFillBlankBranchSchema,
   numeric_input: strictNumericInputBranchSchema,
   flashcard: strictFlashcardBranchSchema,
+  matching: strictMatchingBranchSchema,
+  ordering: strictOrderingBranchSchema,
+  word_order: strictWordOrderBranchSchema,
 } as const;
 
 /**
- * Both branches are always present in form state — which keeps every
+ * Every branch is always present in form state — which keeps every
  * react-hook-form path statically known and every type honest, with no casts —
  * but only the branch named by `type` is validated or serialized.
  */
@@ -126,12 +168,18 @@ export const editorFormSchema = commonEditorFieldsSchema
       "fill_blank",
       "numeric_input",
       "flashcard",
+      "matching",
+      "ordering",
+      "word_order",
     ]),
     multipleChoice: multipleChoiceBranchSchema,
     trueFalse: trueFalseBranchSchema,
     fillBlank: fillBlankBranchSchema,
     numericInput: numericInputBranchSchema,
     flashcard: flashcardBranchSchema,
+    matching: matchingBranchSchema,
+    ordering: orderingBranchSchema,
+    wordOrder: wordOrderBranchSchema,
   })
   .superRefine((values, context) => {
     const key = branchKeyByType[values.type];
@@ -168,13 +216,16 @@ export function createEditorDefaults(
     difficulty: preserved?.difficulty ?? 3,
     scopes: preserved?.scopes ?? [],
     explanation: "",
-    // Both branches start empty on every reset, so Save & New can never carry
+    // Every branch starts empty on every reset, so Save & New can never carry
     // a previous question's statement or answer into the next one.
     multipleChoice: createMultipleChoiceBranch(),
     trueFalse: createTrueFalseBranch(),
     fillBlank: createFillBlankBranch(),
     numericInput: createNumericInputBranch(),
     flashcard: createFlashcardBranch(),
+    matching: createMatchingBranch(),
+    ordering: createOrderingBranch(),
+    wordOrder: createWordOrderBranch(),
   };
 }
 
@@ -228,8 +279,23 @@ export function formValuesFromDetail(
     return branch === null ? null : { ...common, numericInput: branch };
   }
 
-  const branch = flashcardBranchFromDetail(detail);
-  return branch === null ? null : { ...common, flashcard: branch };
+  if (detail.type === "flashcard") {
+    const branch = flashcardBranchFromDetail(detail);
+    return branch === null ? null : { ...common, flashcard: branch };
+  }
+
+  if (detail.type === "matching") {
+    const branch = matchingBranchFromDetail(detail);
+    return branch === null ? null : { ...common, matching: branch };
+  }
+
+  if (detail.type === "ordering") {
+    const branch = orderingBranchFromDetail(detail);
+    return branch === null ? null : { ...common, ordering: branch };
+  }
+
+  const branch = wordOrderBranchFromDetail(detail);
+  return branch === null ? null : { ...common, wordOrder: branch };
 }
 
 function editablePayload(values: EditorFormValues) {
@@ -264,7 +330,19 @@ function editablePayload(values: EditorFormValues) {
     return { ...serializeNumericInputBranch(values.numericInput), ...common };
   }
 
-  return { ...serializeFlashcardBranch(values.flashcard), ...common };
+  if (values.type === "flashcard") {
+    return { ...serializeFlashcardBranch(values.flashcard), ...common };
+  }
+
+  if (values.type === "matching") {
+    return { ...serializeMatchingBranch(values.matching), ...common };
+  }
+
+  if (values.type === "ordering") {
+    return { ...serializeOrderingBranch(values.ordering), ...common };
+  }
+
+  return { ...serializeWordOrderBranch(values.wordOrder), ...common };
 }
 
 export function serializeCreateExercise(

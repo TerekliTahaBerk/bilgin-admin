@@ -115,6 +115,9 @@ const UNITS = {
       status: "draft",
       access: "free",
       node_count: 0,
+      // Unit metadata is backend-computed and deliberately independent of the
+      // rows this mock serves — unit 11 reports 44 for 5 rows for the same
+      // reason.
       exercise_count: 0,
     },
   ],
@@ -219,7 +222,74 @@ const EXERCISES = {
     },
   ],
   12: [],
-  13: [],
+  // The structured types live in their own unit, so the M2/M3 assertions about
+  // unit 11's list stay exactly as they were.
+  13: [
+    {
+      id: 106,
+      type: "ordering",
+      topic: { id: 1, name: "İlk Türk Devletleri" },
+      difficulty: 3,
+      status: "draft",
+      version: 1,
+      scopes: ["tyt"],
+      preview: "Devletleri eskiden yeniye sırala.",
+      stats: {
+        attempts: 6,
+        correct_rate: 50,
+        avg_seconds: 34,
+        needs_review: false,
+      },
+    },
+    {
+      id: 107,
+      type: "word_order",
+      topic: { id: 1, name: "İlk Türk Devletleri" },
+      difficulty: 2,
+      status: "draft",
+      version: 1,
+      scopes: ["tyt"],
+      preview: "Kelimeleri sıralayarak cümleyi kur.",
+      stats: {
+        attempts: 0,
+        correct_rate: null,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    },
+    {
+      id: 108,
+      type: "diagram_label",
+      topic: { id: 2, name: "Kültür ve Medeniyet" },
+      difficulty: 4,
+      status: "published",
+      version: 1,
+      scopes: ["ayt"],
+      preview: "(önizleme yok)",
+      stats: {
+        attempts: 2,
+        correct_rate: 50,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    },
+    {
+      id: 109,
+      type: "matching",
+      topic: { id: 2, name: "Kültür ve Medeniyet" },
+      difficulty: 2,
+      status: "draft",
+      version: 1,
+      scopes: ["tyt"],
+      preview: "Terimleri karşılıklarıyla eşleştir.",
+      stats: {
+        attempts: 0,
+        correct_rate: null,
+        avg_seconds: null,
+        needs_review: false,
+      },
+    },
+  ],
   31: [],
 };
 
@@ -326,20 +396,27 @@ const EXERCISE_DETAILS = {
       needs_review: false,
     },
   },
-  // Read-only on purpose: matching is not an M2 editor type, so its detail
-  // must stay readable while the editor refuses to mutate it.
+  // A real MatchingValidator-shaped row: arbitrary ids, an instruction the
+  // validator ignores but the editor must round-trip, one spare right item and
+  // partial credit switched on.
   104: {
     id: 104,
     type: "matching",
     topic_id: 2,
     difficulty: 5,
     content: {
-      pairs: [
-        { left: "Töre", right: "Yazısız hukuk" },
-        { left: "Kurultay", right: "Devlet meclisi" },
+      instruction: "Kavramı karşılığıyla birleştir.",
+      left: [
+        { id: "l1", text: "Töre" },
+        { id: "l2", text: "Kurultay" },
+      ],
+      right: [
+        { id: "r1", text: "Yazısız hukuk" },
+        { id: "r2", text: "Devlet meclisi" },
+        { id: "r3", text: "Yönetme yetkisi" },
       ],
     },
-    answer_key: { pairs: [["Töre", "Yazısız hukuk"]] },
+    answer_key: { pairs: { l1: "r1", l2: "r2" }, partial_credit: true },
     explanation: null,
     applicable_scopes: ["ayt"],
     status: "archived",
@@ -351,6 +428,132 @@ const EXERCISE_DETAILS = {
       needs_review: true,
     },
   },
+  // Media types stay readable and non-editable: there is no media
+  // infrastructure yet, so no editor pretends there is one.
+  105: {
+    id: 105,
+    type: "image_hotspot",
+    topic_id: 2,
+    difficulty: 1,
+    content: {
+      image_url: "https://cdn.example.test/harita.png",
+      regions: [{ id: "a", shape: "rect", coords: [0, 0, 10, 10] }],
+    },
+    answer_key: { region_id: "a" },
+    explanation: null,
+    applicable_scopes: ["tyt"],
+    status: "published",
+    version: 1,
+    stats: {
+      attempts: 4,
+      correct_rate: 25,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
+  // The answer order deliberately differs from the content list order.
+  106: {
+    id: 106,
+    type: "ordering",
+    topic_id: 1,
+    difficulty: 3,
+    content: {
+      instruction: "Devletleri eskiden yeniye sırala.",
+      items: [
+        { id: "alpha", text: "Uygurlar" },
+        { id: "beta", text: "Göktürkler" },
+        { id: "gamma", text: "Asya Hunları" },
+      ],
+    },
+    answer_key: { order: ["gamma", "beta", "alpha"] },
+    explanation: null,
+    applicable_scopes: ["tyt"],
+    status: "draft",
+    version: 1,
+    stats: {
+      attempts: 6,
+      correct_rate: 50,
+      avg_seconds: 34,
+      needs_review: false,
+    },
+  },
+  107: {
+    id: 107,
+    type: "word_order",
+    topic_id: 1,
+    difficulty: 2,
+    content: {
+      instruction: "Kelimeleri sıralayarak cümleyi kur.",
+      words: [
+        { id: "1", text: "Ben" },
+        { id: "2", text: "okula" },
+        { id: "3", text: "gittim" },
+      ],
+    },
+    answer_key: { order: ["1", "2", "3"] },
+    explanation: null,
+    applicable_scopes: ["tyt"],
+    status: "draft",
+    version: 1,
+    stats: {
+      attempts: 0,
+      correct_rate: null,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
+  // Never mutated by a test: the right-item removal spec needs a pristine
+  // mapping, and this mock's state is shared by every spec in the run.
+  109: {
+    id: 109,
+    type: "matching",
+    topic_id: 2,
+    difficulty: 2,
+    content: {
+      instruction: "Terimleri karşılıklarıyla eşleştir.",
+      left: [
+        { id: "l1", text: "Yuğ" },
+        { id: "l2", text: "Toy" },
+      ],
+      right: [
+        { id: "r1", text: "Cenaze töreni" },
+        { id: "r2", text: "Şölen" },
+        { id: "r3", text: "Boy birliği" },
+      ],
+    },
+    answer_key: { pairs: { l1: "r1", l2: "r2" }, partial_credit: false },
+    explanation: null,
+    applicable_scopes: ["tyt"],
+    status: "draft",
+    version: 1,
+    stats: {
+      attempts: 0,
+      correct_rate: null,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
+  108: {
+    id: 108,
+    type: "diagram_label",
+    topic_id: 2,
+    difficulty: 4,
+    content: {
+      diagram_url: "https://cdn.example.test/diyagram.svg",
+      slots: [{ id: "s1", label: "Kalp" }],
+    },
+    answer_key: { labels: { s1: "Kalp" } },
+    explanation: null,
+    applicable_scopes: ["ayt"],
+    status: "published",
+    version: 1,
+    stats: {
+      attempts: 2,
+      correct_rate: 50,
+      avg_seconds: null,
+      needs_review: false,
+    },
+  },
 };
 
 /** Every editable type keeps a readable list preview. */
@@ -358,11 +561,36 @@ function previewOf(detail) {
   if (detail.type === "true_false") return detail.content.statement;
   if (detail.type === "fill_blank") return detail.content.template;
   if (detail.type === "flashcard") return detail.content.front;
+  if (detail.type === "matching") {
+    // MatchingValidator never requires an instruction, so the preview falls
+    // back to the left column exactly as the real backend does.
+    return (
+      detail.content.instruction ??
+      detail.content.left.map((item) => item.text).join(" · ")
+    );
+  }
+  if (detail.type === "ordering" || detail.type === "word_order") {
+    return detail.content.instruction;
+  }
+  if (detail.type === "image_hotspot" || detail.type === "diagram_label") {
+    return "(önizleme yok)";
+  }
   return detail.content.stem;
 }
 
 /** The answer key shape differs per type; `false` is a real answer. */
 function answerKeyChanged(current, next) {
+  if ("pairs" in next || "pairs" in current) {
+    // partial_credit is part of the answer key the grader reads, so flipping
+    // it is an answer-key change.
+    return (
+      JSON.stringify(current.pairs) !== JSON.stringify(next.pairs) ||
+      Boolean(current.partial_credit) !== Boolean(next.partial_credit)
+    );
+  }
+  if ("order" in next || "order" in current) {
+    return JSON.stringify(current.order) !== JSON.stringify(next.order);
+  }
   if ("self_assessed" in next || "self_assessed" in current) {
     // Flashcards carry no author-editable answer.
     return false;

@@ -121,7 +121,11 @@ test("renders a safe state for an unsupported or malformed create type", async (
 }) => {
   await signIn(page);
 
-  for (const query of ["?type=matching", "?type=banana", "?type=ordering"]) {
+  for (const query of [
+    "?type=image_hotspot",
+    "?type=banana",
+    "?type=diagram_label",
+  ]) {
     await page.goto(`${LIST_PATH}/exercises/new${query}`);
     await expect(
       page.getByRole("heading", {
@@ -149,16 +153,17 @@ test("keeps an unsupported stored type readable but not editable", async ({
 }) => {
   await signIn(page);
   await page.goto(LIST_PATH);
-  // matching stays listed and readable, with no edit link on its own row.
-  const matchingRow = page
+  // image_hotspot stays listed and readable, with no edit link on its own row:
+  // there is no media infrastructure to edit it with.
+  const hotspotRow = page
     .locator("main ul li")
-    .filter({ hasText: "Kavramı karşılığıyla birleştir." });
-  await expect(matchingRow).toHaveCount(1);
-  await expect(matchingRow.getByRole("link", { name: "Düzenle" })).toHaveCount(
+    .filter({ hasText: "Görsel Bölge" });
+  await expect(hotspotRow).toHaveCount(1);
+  await expect(hotspotRow.getByRole("link", { name: "Düzenle" })).toHaveCount(
     0,
   );
 
-  await page.goto(`${LIST_PATH}/exercises/104`);
+  await page.goto(`${LIST_PATH}/exercises/105`);
   await expect(
     page.getByRole("heading", {
       name: "Bu soru tipi henüz bu editörde desteklenmiyor.",
@@ -240,7 +245,7 @@ test("rejects a tampered true/false body before it reaches the backend", async (
       // A type this editor does not support.
       {
         ...base,
-        type: "matching",
+        type: "image_hotspot",
         content: { statement: "x" },
         answer_key: { value: true },
       },

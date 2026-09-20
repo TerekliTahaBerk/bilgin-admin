@@ -162,7 +162,7 @@ test("shows an empty state for a unit with no exercises", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(0);
   await expect(
     page.getByRole("group", { name: "Yeni soru oluştur" }).getByRole("link"),
-  ).toHaveCount(5);
+  ).toHaveCount(8);
 });
 
 test("keeps the session when the unit does not exist", async ({ page }) => {
@@ -185,24 +185,30 @@ test("offers only the supported editor actions", async ({ page }) => {
   await expect(rows(page)).toHaveCount(5);
 
   const createGroup = page.getByRole("group", { name: "Yeni soru oluştur" });
+  // "Sıralama" is also a substring of "Kelime sıralama", so the match is exact.
   for (const label of [
     "Çoktan seçmeli",
     "Doğru / yanlış",
     "Boşluk doldurma",
     "Sayısal cevap",
     "Bilgi kartı",
+    "Eşleştirme",
+    "Sıralama",
+    "Kelime sıralama",
   ]) {
-    await expect(createGroup.getByRole("link", { name: label })).toBeVisible();
+    await expect(
+      createGroup.getByRole("link", { name: label, exact: true }),
+    ).toBeVisible();
   }
-  await expect(createGroup.getByRole("link")).toHaveCount(5);
-  // The seeded rows cover three editable types; matching and image_hotspot
-  // stay read-only.
-  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(3);
+  await expect(createGroup.getByRole("link")).toHaveCount(8);
+  // The seeded rows cover four editable types; only image_hotspot stays
+  // read-only, because there is no media infrastructure to edit it with.
+  await expect(page.getByRole("link", { name: "Düzenle" })).toHaveCount(4);
 
   for (const absent of ["Arşivle", "Yayınla", "Kaydet"]) {
     await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
   }
-  await expect(page.locator("main ul li a")).toHaveCount(3);
+  await expect(page.locator("main ul li a")).toHaveCount(4);
   await expect(page.locator("main ul li button")).toHaveCount(0);
 });
 

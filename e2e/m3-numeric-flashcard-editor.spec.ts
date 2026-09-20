@@ -386,7 +386,7 @@ test("both editors stack without horizontal overflow on a phone", async ({
   await page.goto(LIST_PATH);
   await expect(
     page.getByRole("group", { name: "Yeni soru oluştur" }).getByRole("link"),
-  ).toHaveCount(5);
+  ).toHaveCount(8);
   const listOverflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -

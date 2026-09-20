@@ -143,6 +143,9 @@ const CREATE_ACTIONS: { type: SupportedEditorType; label: string }[] = [
   { type: "fill_blank", label: "Boşluk doldurma" },
   { type: "numeric_input", label: "Sayısal cevap" },
   { type: "flashcard", label: "Bilgi kartı" },
+  { type: "matching", label: "Eşleştirme" },
+  { type: "ordering", label: "Sıralama" },
+  { type: "word_order", label: "Kelime sıralama" },
 ];
 
 function ListSkeleton() {
@@ -339,7 +342,7 @@ export function ExercisesBrowser({
       />
       {canEdit ? (
         /*
-         * Five equally weighted primary buttons would crowd the header, so the
+         * Eight equally weighted primary buttons would crowd the header, so the
          * actions are compact links under one labelled group. A native group
          * keeps them all reachable in one tab sequence with no new dependency
          * and nothing hidden behind a toggle.

@@ -117,6 +117,8 @@ export function sealExpiredSession(): Promise<string> {
 /** Mirrors the EXERCISES fixture served by e2e/support/mock-backend.mjs. */
 export const E2E_UNIT_WITH_EXERCISES_ID = 11;
 export const E2E_UNIT_WITHOUT_EXERCISES_ID = 12;
+/** Holds the ordering, word order and diagram_label rows. */
+export const E2E_UNIT_WITH_STRUCTURED_ID = 13;
 export const E2E_MISSING_UNIT_ID = 999999;
 export const E2E_EXERCISES = [
   {
