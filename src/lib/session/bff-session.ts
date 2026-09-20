@@ -85,6 +85,27 @@ export async function readPublisherBffSession(
   return result;
 }
 
+export async function readCurriculumBffSession(
+  request: NextRequest,
+): Promise<SessionResult> {
+  const result = await readBffSession(request);
+  if (!result.ok) return result;
+
+  if (!can(result.session.admin, "edit_curriculum")) {
+    return {
+      ok: false,
+      response: createSessionErrorResponse({
+        kind: "authorization",
+        status: 403,
+        code: "FORBIDDEN",
+        message: "Müfredat ve yönetici yönetimi yetkiniz yok.",
+      }),
+    };
+  }
+
+  return result;
+}
+
 export function clearSessionForBackendAuthentication(): NextResponse {
   return clearedInvalidSessionResponse();
 }

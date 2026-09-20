@@ -225,7 +225,13 @@ function EmptyState() {
   );
 }
 
-export function UnitsBrowser({ courseId }: { courseId: number }) {
+export function UnitsBrowser({
+  canEdit = false,
+  courseId,
+}: {
+  canEdit?: boolean;
+  courseId: number;
+}) {
   const router = useRouter();
 
   // Both queries start together: the unit list never waits for course metadata,
@@ -313,7 +319,17 @@ export function UnitsBrowser({ courseId }: { courseId: number }) {
 
   return (
     <>
-      {header}
+      <div className="relative">
+        {header}
+        {canEdit && !courseIsMissing && !unitsNotFound ? (
+          <Link
+            className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white sm:absolute sm:right-0 sm:bottom-5 sm:mt-0"
+            href={`/courses/${courseId}/units/new`}
+          >
+            Yeni ünite
+          </Link>
+        ) : null}
+      </div>
       <div className="mt-6">{body()}</div>
     </>
   );

@@ -7,6 +7,13 @@ import type {
   CreateExerciseRequest,
   UpdateExerciseRequest,
 } from "@/contracts/admin/exercise-editor";
+import type {
+  ContentPackage,
+  CreateAdminRequest,
+  CreateUnitRequest,
+  UpdateAdminRequest,
+  UpdateCurriculumRequest,
+} from "@/contracts/admin/workflows";
 import {
   createNetworkError,
   createProtocolError,
@@ -32,6 +39,7 @@ export const ADMIN_EXERCISE_MUTATION_TIMEOUT_MS = 15_000;
 export const ADMIN_UNIT_NODES_TIMEOUT_MS = 10_000;
 export const ADMIN_NODE_PREVIEW_TIMEOUT_MS = 15_000;
 export const ADMIN_PUBLISH_TIMEOUT_MS = 20_000;
+export const ADMIN_WORKFLOW_TIMEOUT_MS = 20_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -100,6 +108,59 @@ const ADMIN_BACKEND_ENDPOINTS = {
     path: (unitId: number) => `/api/admin/v1/units/${unitId}/publish`,
     timeoutMs: ADMIN_PUBLISH_TIMEOUT_MS,
   },
+  unitTemplates: {
+    method: "GET",
+    path: "/api/admin/v1/unit-templates",
+    timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
+  },
+  createUnit: {
+    method: "POST",
+    path: "/api/admin/v1/units",
+    timeoutMs: ADMIN_WORKFLOW_TIMEOUT_MS,
+  },
+  archiveExercise: {
+    method: "DELETE",
+    path: (exerciseId: number) => `/api/admin/v1/exercises/${exerciseId}`,
+    timeoutMs: ADMIN_EXERCISE_MUTATION_TIMEOUT_MS,
+  },
+  importContent: {
+    method: "POST",
+    path: "/api/admin/v1/content/import",
+    timeoutMs: ADMIN_WORKFLOW_TIMEOUT_MS,
+  },
+  curriculumOptions: {
+    method: "GET",
+    path: "/api/admin/v1/curriculum/options",
+    timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
+  },
+  curriculumMapping: {
+    method: "GET",
+    path: (variantId: number) =>
+      `/api/admin/v1/exam-variants/${variantId}/courses`,
+    timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
+  },
+  updateCurriculum: {
+    method: "PUT",
+    path: (variantId: number) =>
+      `/api/admin/v1/exam-variants/${variantId}/courses`,
+    timeoutMs: ADMIN_WORKFLOW_TIMEOUT_MS,
+  },
+  admins: {
+    method: "GET",
+    path: "/api/admin/v1/admins",
+    timeoutMs: ADMIN_UNITS_TIMEOUT_MS,
+  },
+  createAdmin: {
+    method: "POST",
+    path: "/api/admin/v1/admins",
+    timeoutMs: ADMIN_WORKFLOW_TIMEOUT_MS,
+  },
+  updateAdmin: {
+    method: "PATCH",
+    path: (adminId: string) =>
+      `/api/admin/v1/admins/${encodeURIComponent(adminId)}`,
+    timeoutMs: ADMIN_WORKFLOW_TIMEOUT_MS,
+  },
 } as const;
 
 export type BackendResult<Value> =
@@ -116,7 +177,8 @@ type AdminBackendRequest =
       signal?: AbortSignal;
     }>
   | Readonly<{
-      operation: "me" | "courses";
+      operation:
+        "me" | "courses" | "unitTemplates" | "curriculumOptions" | "admins";
       backendToken: string;
       signal?: AbortSignal;
     }>
@@ -167,6 +229,50 @@ type AdminBackendRequest =
   | Readonly<{
       operation: "nodePreview";
       nodeId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "createUnit";
+      body: CreateUnitRequest;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "archiveExercise";
+      exerciseId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "importContent";
+      body: ContentPackage;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "curriculumMapping";
+      variantId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "updateCurriculum";
+      variantId: number;
+      body: UpdateCurriculumRequest;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "createAdmin";
+      body: CreateAdminRequest;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "updateAdmin";
+      adminId: string;
+      body: UpdateAdminRequest;
       backendToken: string;
       signal?: AbortSignal;
     }>;
@@ -248,8 +354,22 @@ function endpointPath(request: AdminBackendRequest): string {
   }
 
   if (
+    request.operation === "curriculumMapping" ||
+    request.operation === "updateCurriculum"
+  ) {
+    return ADMIN_BACKEND_ENDPOINTS[request.operation].path(
+      requireResourceId(request.variantId),
+    );
+  }
+
+  if (request.operation === "updateAdmin") {
+    return ADMIN_BACKEND_ENDPOINTS.updateAdmin.path(request.adminId);
+  }
+
+  if (
     request.operation === "exerciseDetail" ||
-    request.operation === "updateExercise"
+    request.operation === "updateExercise" ||
+    request.operation === "archiveExercise"
   ) {
     return ADMIN_BACKEND_ENDPOINTS[request.operation].path(
       requireResourceId(request.exerciseId),
@@ -280,7 +400,12 @@ function createBackendRequest(request: AdminBackendRequest): {
 
     if (
       request.operation === "createExercise" ||
-      request.operation === "updateExercise"
+      request.operation === "updateExercise" ||
+      request.operation === "createUnit" ||
+      request.operation === "importContent" ||
+      request.operation === "updateCurriculum" ||
+      request.operation === "createAdmin" ||
+      request.operation === "updateAdmin"
     ) {
       headers.set("Content-Type", "application/json");
       init.body = JSON.stringify(request.body);
