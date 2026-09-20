@@ -18,10 +18,13 @@ import {
   validExerciseDetailResponse,
   validFillBlankDetailResponse,
   validFlashcardDetailResponse,
+  validMatchingDetailResponse,
   validNumericInputDetailResponse,
+  validOrderingDetailResponse,
   validTopicsResponse,
   validTrueFalseDetailResponse,
   validUpdateExerciseResponse,
+  validWordOrderDetailResponse,
 } from "@/test/fixtures/exercise-editor-api";
 import { mswServer } from "@/test/integration/msw-server";
 import {
@@ -1240,39 +1243,36 @@ describe("flashcard mutations through the real BFF chain", () => {
   });
 });
 
-describe("the five unsupported types stay unmutable", () => {
-  it.each([
-    ["matching"],
-    ["ordering"],
-    ["word_order"],
-    ["image_hotspot"],
-    ["diagram_label"],
-  ])("rejects a %s mutation with 400 and zero backend calls", async (type) => {
-    const seal = await issueSession();
-    const seen = vi.fn();
-    mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+describe("the two media types stay unmutable", () => {
+  it.each([["image_hotspot"], ["diagram_label"]])(
+    "rejects a %s mutation with 400 and zero backend calls",
+    async (type) => {
+      const seal = await issueSession();
+      const seen = vi.fn();
+      mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
 
-    const created = await create(
-      mutationRequest(
-        "/api/admin/exercises",
-        seal,
-        "POST",
-        { ...flashcardEditable, type, owner_unit_id: 12 },
-        { origin: APP_ORIGIN },
-      ),
-    );
-    const updated = await update(
-      mutationRequest("/api/admin/exercises/5", seal, "PATCH", {
-        ...flashcardEditable,
-        type,
-      }),
-      { params: Promise.resolve({ exerciseId: "5" }) },
-    );
+      const created = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          seal,
+          "POST",
+          { ...flashcardEditable, type, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+      const updated = await update(
+        mutationRequest("/api/admin/exercises/5", seal, "PATCH", {
+          ...flashcardEditable,
+          type,
+        }),
+        { params: Promise.resolve({ exerciseId: "5" }) },
+      );
 
-    expect(created.status).toBe(400);
-    expect(updated.status).toBe(400);
-    expect(seen).not.toHaveBeenCalled();
-  });
+      expect(created.status).toBe(400);
+      expect(updated.status).toBe(400);
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["numeric_input", numericEditable],
@@ -1305,6 +1305,456 @@ describe("the five unsupported types stay unmutable", () => {
           { origin: APP_ORIGIN },
         ),
       );
+      expect(forbidden.status).toBe(403);
+      expect(setCookieHeader(forbidden)).toBeUndefined();
+      expect(seen).not.toHaveBeenCalled();
+    },
+  );
+});
+
+const matchingEditable = {
+  type: "matching",
+  topic_id: 1,
+  difficulty: 3,
+  content: {
+    left: [
+      { id: "1", text: "Kurultay" },
+      { id: "2", text: "Kut" },
+    ],
+    right: [
+      { id: "a", text: "Meclis" },
+      { id: "b", text: "Yönetme yetkisi" },
+    ],
+  },
+  answer_key: { pairs: { "1": "a", "2": "b" }, partial_credit: false },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+const orderingEditable = {
+  type: "ordering",
+  topic_id: 1,
+  difficulty: 3,
+  content: {
+    instruction: "Eskiden yeniye sırala.",
+    items: [
+      { id: "1", text: "Göktürkler" },
+      { id: "2", text: "Uygurlar" },
+    ],
+  },
+  answer_key: { order: ["1", "2"] },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+const wordOrderEditable = {
+  type: "word_order",
+  topic_id: 1,
+  difficulty: 3,
+  content: {
+    instruction: "Doğru cümleyi oluştur.",
+    words: [
+      { id: "1", text: "Ben" },
+      { id: "2", text: "okula" },
+      { id: "3", text: "gittim" },
+    ],
+  },
+  answer_key: { order: ["1", "2", "3"] },
+  explanation: null,
+  applicable_scopes: ["tyt"],
+};
+
+/** Asserts a body never reaches the backend and the BFF answers 400. */
+async function rejectsMutation(body: object) {
+  const seal = await issueSession();
+  const seen = vi.fn();
+  mswServer.use(http.post(CREATE_URL, seen), http.patch(DETAIL_URL, seen));
+
+  const created = await create(
+    mutationRequest(
+      "/api/admin/exercises",
+      seal,
+      "POST",
+      { ...body, owner_unit_id: 12 },
+      { origin: APP_ORIGIN },
+    ),
+  );
+  const updated = await update(
+    mutationRequest("/api/admin/exercises/6", seal, "PATCH", body),
+    { params: Promise.resolve({ exerciseId: "6" }) },
+  );
+
+  expect(created.status).toBe(400);
+  expect(updated.status).toBe(400);
+  expect(seen).not.toHaveBeenCalled();
+}
+
+describe("structured detail reads through the real BFF chain", () => {
+  it.each([
+    ["matching", validMatchingDetailResponse],
+    ["ordering", validOrderingDetailResponse],
+    ["word_order", validWordOrderDetailResponse],
+  ])(
+    "reads a stored %s question with its answer key intact",
+    async (_label, fixture) => {
+      const seal = await issueSession();
+      mswServer.use(http.get(DETAIL_URL, () => HttpResponse.json(fixture)));
+
+      const response = await detail(
+        resourceRequest("/api/admin/exercises/6", seal),
+        { params: Promise.resolve({ exerciseId: "6" }) },
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.data.type).toBe(fixture.data.type);
+      // The BFF validates the shape and passes the stored answer key through
+      // verbatim; it never rewrites content on a read.
+      expect(payload.data.answer_key).toEqual(fixture.data.answer_key);
+      expect(payload.data.content).toEqual(fixture.data.content);
+    },
+  );
+
+  it("keeps a matching detail with no stored partial_credit readable", async () => {
+    const seal = await issueSession();
+    mswServer.use(
+      http.get(DETAIL_URL, () =>
+        HttpResponse.json({
+          ...validMatchingDetailResponse,
+          data: {
+            ...validMatchingDetailResponse.data,
+            answer_key: { pairs: { l1: "r1", l2: "r2" } },
+          },
+        }),
+      ),
+    );
+
+    const response = await detail(
+      resourceRequest("/api/admin/exercises/6", seal),
+      { params: Promise.resolve({ exerciseId: "6" }) },
+    );
+
+    // The stored row is passed through as-is — "missing" is not rewritten on
+    // the wire. The editor form reads it as false, mirroring the grader's
+    // (bool) cast, which matchingBranchFromDetail covers.
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.answer_key).toEqual({
+      pairs: { l1: "r1", l2: "r2" },
+    });
+  });
+});
+
+describe("matching mutations through the real BFF chain", () => {
+  it("creates with exact pairs and a boolean partial_credit, stripping everything else", async () => {
+    const seal = await issueSession();
+    let raw = "";
+    let body: unknown;
+    let authorization: string | null = null;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        raw = await request.text();
+        body = JSON.parse(raw);
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...matchingEditable,
+          owner_unit_id: 12,
+          id: 77,
+          status: "published",
+          version: 9,
+          stats: { attempts: 3 },
+          owner_course_id: 4,
+        },
+        { origin: APP_ORIGIN, authorization: "Bearer attacker" },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...matchingEditable, owner_unit_id: 12 });
+    // The wire format itself: a real JSON boolean, not the string "false".
+    expect(raw).toContain('"partial_credit":false');
+    expect(authorization).toBe(`Bearer ${contentEditorFixture.token}`);
+    for (const stripped of [
+      "id",
+      "status",
+      "version",
+      "stats",
+      "owner_course_id",
+    ]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it("forwards two left items mapped to the same right item", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        {
+          ...matchingEditable,
+          answer_key: { pairs: { "1": "a", "2": "a" }, partial_credit: true },
+          owner_unit_id: 12,
+        },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      answer_key: { pairs: { "1": "a", "2": "a" }, partial_credit: true },
+    });
+  });
+
+  it("updates without forwarding ownership, status or version", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/6", seal, "PATCH", {
+        ...matchingEditable,
+        owner_unit_id: 999,
+        status: "archived",
+        version: 3,
+        id: 6,
+      }),
+      { params: Promise.resolve({ exerciseId: "6" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual(matchingEditable);
+    for (const stripped of ["owner_unit_id", "status", "version", "id"]) {
+      expect(body).not.toHaveProperty(stripped);
+    }
+  });
+
+  it.each([
+    [
+      "a single left item",
+      {
+        content: {
+          ...matchingEditable.content,
+          left: [{ id: "1", text: "A" }],
+        },
+      },
+    ],
+    [
+      "duplicate left ids",
+      {
+        content: {
+          ...matchingEditable.content,
+          left: [
+            { id: "1", text: "A" },
+            { id: "1", text: "B" },
+          ],
+        },
+      },
+    ],
+    [
+      "a left item with no pair",
+      { answer_key: { pairs: { "1": "a" }, partial_credit: false } },
+    ],
+    [
+      "an unknown pair key",
+      {
+        answer_key: {
+          pairs: { "1": "a", "2": "b", "9": "a" },
+          partial_credit: false,
+        },
+      },
+    ],
+    [
+      "an unknown right target",
+      {
+        answer_key: { pairs: { "1": "a", "2": "zz" }, partial_credit: false },
+      },
+    ],
+    [
+      "a string partial_credit",
+      {
+        answer_key: { pairs: { "1": "a", "2": "b" }, partial_credit: "false" },
+      },
+    ],
+  ])("rejects %s with 400 and zero backend calls", async (_label, override) => {
+    await rejectsMutation({ ...matchingEditable, ...override });
+  });
+});
+
+describe("ordering and word order mutations through the real BFF chain", () => {
+  it.each([
+    ["ordering", orderingEditable],
+    ["word_order", wordOrderEditable],
+  ])("creates a canonical %s body", async (_label, editableBody) => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.post(CREATE_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validCreateExerciseResponse, { status: 201 });
+      }),
+    );
+
+    const response = await create(
+      mutationRequest(
+        "/api/admin/exercises",
+        seal,
+        "POST",
+        { ...editableBody, owner_unit_id: 12, status: "published", id: 9 },
+        { origin: APP_ORIGIN },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+    expect(body).toEqual({ ...editableBody, owner_unit_id: 12 });
+  });
+
+  it("updates an ordering answer order without forwarding ownership", async () => {
+    const seal = await issueSession();
+    let body: unknown;
+    mswServer.use(
+      http.patch(DETAIL_URL, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(validUpdateExerciseResponse);
+      }),
+    );
+
+    const response = await update(
+      mutationRequest("/api/admin/exercises/7", seal, "PATCH", {
+        ...orderingEditable,
+        answer_key: { order: ["2", "1"] },
+        owner_unit_id: 999,
+      }),
+      { params: Promise.resolve({ exerciseId: "7" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      ...orderingEditable,
+      answer_key: { order: ["2", "1"] },
+    });
+    expect(body).not.toHaveProperty("owner_unit_id");
+  });
+
+  it.each([
+    ["a missing id in the order", { answer_key: { order: ["1"] } }],
+    ["a duplicated id in the order", { answer_key: { order: ["1", "1"] } }],
+    ["an unknown id in the order", { answer_key: { order: ["1", "x"] } }],
+    ["an extra id in the order", { answer_key: { order: ["1", "2", "3"] } }],
+    [
+      "duplicate item ids",
+      {
+        content: {
+          ...orderingEditable.content,
+          items: [
+            { id: "1", text: "A" },
+            { id: "1", text: "B" },
+          ],
+        },
+      },
+    ],
+    [
+      "a blank instruction",
+      { content: { ...orderingEditable.content, instruction: " " } },
+    ],
+  ])("rejects an ordering body with %s", async (_label, override) => {
+    await rejectsMutation({ ...orderingEditable, ...override });
+  });
+
+  it.each([
+    ["a missing id in the order", { answer_key: { order: ["1", "2"] } }],
+    [
+      "a duplicated id in the order",
+      { answer_key: { order: ["1", "2", "2"] } },
+    ],
+    ["an unknown id in the order", { answer_key: { order: ["1", "2", "x"] } }],
+    [
+      "an extra id in the order",
+      { answer_key: { order: ["1", "2", "3", "4"] } },
+    ],
+  ])("rejects a word_order body with %s", async (_label, override) => {
+    await rejectsMutation({ ...wordOrderEditable, ...override });
+  });
+
+  it("never lets a word_order body keyed on content.items reach the backend", async () => {
+    // Serialising ordering's key into a word_order question would store a
+    // question the backend's WordOrderValidator rejects outright.
+    await rejectsMutation({
+      ...wordOrderEditable,
+      content: {
+        instruction: "Doğru cümleyi oluştur.",
+        items: wordOrderEditable.content.words,
+      },
+    });
+  });
+
+  it("never lets an ordering body keyed on content.words reach the backend", async () => {
+    await rejectsMutation({
+      ...orderingEditable,
+      content: {
+        instruction: "Eskiden yeniye sırala.",
+        words: orderingEditable.content.items,
+      },
+    });
+  });
+
+  it.each([
+    ["matching", matchingEditable],
+    ["ordering", orderingEditable],
+    ["word_order", wordOrderEditable],
+  ])(
+    "keeps the %s guards: wrong Origin, missing Origin and edit_content=false all stop before the backend",
+    async (_label, editableBody) => {
+      const seen = vi.fn();
+      const editorSeal = await issueSession();
+      mswServer.use(http.post(CREATE_URL, seen));
+
+      for (const origin of ["https://evil.test", undefined]) {
+        const response = await create(
+          mutationRequest(
+            "/api/admin/exercises",
+            editorSeal,
+            "POST",
+            { ...editableBody, owner_unit_id: 12 },
+            origin === undefined ? {} : { origin },
+          ),
+        );
+        expect(response.status).toBe(403);
+      }
+
+      const reviewerSeal = await issueSession(contentReviewerFixture);
+      const forbidden = await create(
+        mutationRequest(
+          "/api/admin/exercises",
+          reviewerSeal,
+          "POST",
+          { ...editableBody, owner_unit_id: 12 },
+          { origin: APP_ORIGIN },
+        ),
+      );
+
       expect(forbidden.status).toBe(403);
       expect(setCookieHeader(forbidden)).toBeUndefined();
       expect(seen).not.toHaveBeenCalled();

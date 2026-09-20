@@ -32,7 +32,7 @@ export function PreviewShell({
 }: PreviewShellProps) {
   return (
     <aside
-      className="lg:sticky lg:top-6 lg:self-start"
+      className="min-w-0 lg:sticky lg:top-6 lg:self-start"
       aria-label="Canlı önizleme"
     >
       <div className="rounded-lg border border-border bg-surface">

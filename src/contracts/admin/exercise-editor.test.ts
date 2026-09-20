@@ -85,14 +85,8 @@ describe("exercise editor backend contracts", () => {
     ).toBe(false);
   });
 
-  it("keeps the five unsupported detail types readable for a safe UI state", () => {
-    for (const type of [
-      "matching",
-      "ordering",
-      "word_order",
-      "image_hotspot",
-      "diagram_label",
-    ]) {
+  it("keeps the two unsupported detail types readable for a safe UI state", () => {
+    for (const type of ["image_hotspot", "diagram_label"]) {
       const parsed = exerciseDetailResponseSchema.parse({
         ...validExerciseDetailResponse,
         data: {

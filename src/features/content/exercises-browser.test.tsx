@@ -533,6 +533,9 @@ describe("ExercisesBrowser editor actions", () => {
       ["Boşluk doldurma", `${base}?type=fill_blank`],
       ["Sayısal cevap", `${base}?type=numeric_input`],
       ["Bilgi kartı", `${base}?type=flashcard`],
+      ["Eşleştirme", `${base}?type=matching`],
+      ["Sıralama", `${base}?type=ordering`],
+      ["Kelime sıralama", `${base}?type=word_order`],
     ];
 
     const group = within(
@@ -545,9 +548,9 @@ describe("ExercisesBrowser editor actions", () => {
     }
     expect(group.getAllByRole("link")).toHaveLength(expected.length);
 
-    // The five remaining types have no create action.
-    expect(screen.queryByRole("link", { name: /eşleştirme/i })).toBeNull();
+    // The two media types have no create action.
     expect(screen.queryByRole("link", { name: /görsel/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /diyagram/i })).toBeNull();
   });
 
   it("links Düzenle for the editable types only", async () => {
@@ -555,12 +558,13 @@ describe("ExercisesBrowser editor actions", () => {
     await screen.findByText("(önizleme yok)");
 
     // Fixture rows: multiple_choice(1), true_false(2), fill_blank(3),
-    // matching(4), image_hotspot(5). Only the first three are editable.
+    // matching(4), image_hotspot(5). Only image_hotspot is not editable.
     const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
     expect(editLinks.map((link) => link.getAttribute("href")).sort()).toEqual([
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/2`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/3`,
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/4`,
     ]);
   });
 
@@ -587,14 +591,15 @@ describe("ExercisesBrowser editor actions", () => {
     renderBrowser({}, true);
     await screen.findByText("multiple_choice önizleme");
 
-    // The five M3 editor types are editable; the other five stay read-only.
+    // The eight text editor types are editable; the two media types stay
+    // read-only until there is media infrastructure to edit them with.
     expect(
       screen
         .getAllByRole("link", { name: "Düzenle" })
         .map((link) => link.getAttribute("href"))
         .sort(),
     ).toEqual(
-      [1, 2, 3, 4, 5]
+      [1, 2, 3, 4, 5, 6, 7, 8]
         .map((id) => `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/${id}`)
         .sort(),
     );

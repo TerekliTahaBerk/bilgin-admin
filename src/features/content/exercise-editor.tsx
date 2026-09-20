@@ -76,9 +76,21 @@ import {
   NumericInputPreview,
 } from "@/features/content/numeric-input-section";
 import {
+  MatchingFields,
+  MatchingPreview,
+} from "@/features/content/matching-section";
+import {
   MultipleChoiceFields,
   MultipleChoicePreview,
 } from "@/features/content/multiple-choice-section";
+import {
+  OrderingFields,
+  OrderingPreview,
+} from "@/features/content/ordering-section";
+import {
+  WordOrderFields,
+  WordOrderPreview,
+} from "@/features/content/word-order-section";
 import {
   TrueFalseFields,
   TrueFalsePreview,
@@ -150,6 +162,30 @@ const SERVER_FIELD_PATHS: Record<
     // belongs beside the card text rather than nowhere.
     answer_key: "flashcard.back",
   },
+  matching: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "matching.left",
+    answer_key: "matching.pairs",
+  },
+  ordering: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "ordering.instruction",
+    answer_key: "ordering.order",
+  },
+  word_order: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "wordOrder.instruction",
+    answer_key: "wordOrder.order",
+  },
 };
 
 /**
@@ -189,6 +225,21 @@ const EDITOR_SECTIONS: Record<
     heading: "Kart içeriği",
     Fields: FlashcardFields,
     Preview: FlashcardPreview,
+  },
+  matching: {
+    heading: "Eşleştirme içeriği",
+    Fields: MatchingFields,
+    Preview: MatchingPreview,
+  },
+  ordering: {
+    heading: "Sıralama içeriği",
+    Fields: OrderingFields,
+    Preview: OrderingPreview,
+  },
+  word_order: {
+    heading: "Kelime sıralama içeriği",
+    Fields: WordOrderFields,
+    Preview: WordOrderPreview,
   },
 };
 
@@ -240,7 +291,7 @@ export function EditorAccessDenied() {
 export function EditorUnsupportedType() {
   return (
     <SafeState
-      message="Bu soru tipi bu editörle değiştirilemez. Çoktan seçmeli, doğru / yanlış, boşluk doldurma, sayısal cevap ve bilgi kartı soruları düzenlenebilir."
+      message="Bu soru tipi bu editörle değiştirilemez. Görsel bölge ve diyagram etiketleme soruları için medya altyapısı henüz yok; diğer sekiz soru tipi düzenlenebilir."
       title="Bu soru tipi henüz bu editörde desteklenmiyor."
     />
   );
@@ -694,7 +745,13 @@ export function ExerciseEditor({
         method="post"
         onSubmit={handleFormSubmit}
       >
-        <div className="space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
+        {/*
+         * min-w-0 is the single-column counterpart of the lg minmax(0, …)
+         * tracks: without it a grid item's automatic minimum size is its
+         * min-content, which a select's widest option or a fixed-width control
+         * row can push past the viewport on a phone.
+         */}
+        <div className="min-w-0 space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
           <section aria-labelledby="common-fields" className="space-y-4">
             <h2 className="text-sm font-semibold" id="common-fields">
               Ortak alanlar

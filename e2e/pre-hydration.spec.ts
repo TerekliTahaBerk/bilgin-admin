@@ -93,6 +93,17 @@ test.describe("native exercise editor submit", () => {
     "suffix",
     "front",
     "back",
+    "left",
+    "right",
+    "pairs",
+    "partialCredit",
+    "instruction",
+    "items",
+    "words",
+    // "order" is deliberately absent from this substring scan: it is a
+    // substring of the safe type values "ordering" and "word_order". The
+    // exact searchParams allowlist above already proves no `order` parameter
+    // can appear.
   ];
   const STEM = "Pre hydration sizinti sorusu";
   const OPTION_TEXT = "Pre hydration sik metni";
@@ -101,6 +112,10 @@ test.describe("native exercise editor submit", () => {
   const FILL_BLANK_ANSWER = "Pre hydration sizinti cevabi";
   const NUMERIC_ANSWER = "13579";
   const CARD_BACK = "Pre hydration sizinti karti";
+  const MATCH_LEFT = "Pre hydration sizinti sol";
+  const MATCH_RIGHT = "Pre hydration sizinti sag";
+  const INSTRUCTION = "Pre hydration sizinti yonergesi";
+  const ITEM_TEXT = "Pre hydration sizinti ogesi";
 
   async function signIn(page: Page) {
     await page.goto("/login");
@@ -137,6 +152,10 @@ test.describe("native exercise editor submit", () => {
       FILL_BLANK_ANSWER,
       NUMERIC_ANSWER,
       CARD_BACK,
+      MATCH_LEFT,
+      MATCH_RIGHT,
+      INSTRUCTION,
+      ITEM_TEXT,
     ]) {
       expect(url).not.toContain(secret);
       expect(url).not.toContain(encodeURIComponent(secret));
@@ -388,4 +407,86 @@ test.describe("native exercise editor submit", () => {
     await page.waitForLoadState("load").catch(() => undefined);
     expectNoLeak(page.url(), { type: "flashcard" });
   });
+
+  test("native submit on the matching route keeps only the safe type query", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`${NEW_PATH}?type=matching`);
+
+    await page.getByLabel("Konu").selectOption("1");
+    await page.getByLabel("Sol öğe 1 metni").fill(MATCH_LEFT);
+    await page.getByLabel("Sol öğe 2 metni").fill(`${MATCH_LEFT} 2`);
+    await page.getByLabel("Sağ öğe 1 metni").fill(MATCH_RIGHT);
+    await page.getByLabel("Sağ öğe 2 metni").fill(`${MATCH_RIGHT} 2`);
+    await page
+      .getByLabel(`${MATCH_LEFT} için eşleşen sağ öğe`)
+      .selectOption("a");
+    await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (candidate) =>
+          candidate.isNavigationRequest() &&
+          candidate.url().includes("/exercises"),
+      ),
+      page.evaluate(() => {
+        const target = document
+          .querySelector("#matching-instruction")
+          ?.closest("form");
+        if (target === null || target === undefined) {
+          throw new Error("editor form not found");
+        }
+        HTMLFormElement.prototype.submit.call(target);
+      }),
+    ]);
+
+    expect(request.method()).toBe("POST");
+    // The left and right texts, the pair mapping and the partial-credit flag
+    // may never reach the URL; only the safe type enum may.
+    expectNoLeak(request.url(), { type: "matching" });
+
+    await page.waitForLoadState("load").catch(() => undefined);
+    expectNoLeak(page.url(), { type: "matching" });
+  });
+
+  for (const [type, instructionId] of [
+    ["ordering", "ordering-instruction"],
+    ["word_order", "wordOrder-instruction"],
+  ] as const) {
+    test(`native submit on the ${type} route keeps only the safe type query`, async ({
+      page,
+    }) => {
+      await signIn(page);
+      await page.goto(`${NEW_PATH}?type=${type}`);
+
+      await page.getByLabel("Konu").selectOption("1");
+      await page.getByLabel("Yönerge").fill(INSTRUCTION);
+      const itemLabel = type === "ordering" ? "Öğe" : "Kelime";
+      await page.getByLabel(`${itemLabel} 1 metni`).fill(ITEM_TEXT);
+      await page.getByLabel(`${itemLabel} 2 metni`).fill(`${ITEM_TEXT} 2`);
+      await page.getByLabel("Açıklama").fill(EXPLANATION);
+
+      const [request] = await Promise.all([
+        page.waitForRequest(
+          (candidate) =>
+            candidate.isNavigationRequest() &&
+            candidate.url().includes("/exercises"),
+        ),
+        page.evaluate((id) => {
+          const target = document.querySelector(`#${id}`)?.closest("form");
+          if (target === null || target === undefined) {
+            throw new Error("editor form not found");
+          }
+          HTMLFormElement.prototype.submit.call(target);
+        }, instructionId),
+      ]);
+
+      expect(request.method()).toBe("POST");
+      expectNoLeak(request.url(), { type });
+
+      await page.waitForLoadState("load").catch(() => undefined);
+      expectNoLeak(page.url(), { type });
+    });
+  }
 });
