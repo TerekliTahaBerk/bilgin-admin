@@ -40,10 +40,25 @@ const REVIEWER = {
   },
 };
 
+const SUPER_ADMIN = {
+  id: "01a0ab9b-0000-4000-8000-000000005a5a",
+  name: "Süper Yönetici",
+  email: "admin@bilgin.test",
+  role: "super_admin",
+  role_label: "Süper Yönetici",
+  abilities: {
+    edit_content: true,
+    publish_content: true,
+    edit_curriculum: true,
+    view_users: true,
+  },
+};
+
 // Test-only credentials. These are not real credentials for any environment.
 const VALID_EMAIL = "editor@bilgin.test";
 const VALID_PASSWORD = "test-password";
 const REVIEWER_TOKEN = "test-e2e-reviewer-token";
+const SUPER_ADMIN_TOKEN = "test-e2e-super-admin-token";
 
 /**
  * Deliberately varied: several scopes, every publish status the backend can
@@ -468,6 +483,19 @@ const TOPICS = {
       },
     ],
   },
+  2: {
+    course: { id: 2, name: "TYT Temel Matematik" },
+    subject_id: 2,
+    topics: [
+      {
+        id: 21,
+        code: "temel_kavramlar",
+        name: "Temel Kavramlar",
+        grade_level: 9,
+        exercise_count: 0,
+      },
+    ],
+  },
   3: {
     course: { id: 3, name: "AYT Fizik" },
     subject_id: 3,
@@ -762,6 +790,98 @@ function answerKeyChanged(current, next) {
 }
 
 let nextExerciseId = 201;
+let nextUnitId = 41;
+
+const UNIT_TEMPLATES = [
+  {
+    code: "standard",
+    name: "Standart Ünite",
+    description: "Çalışma ve mini challenge",
+    is_default: true,
+    nodes: [
+      {
+        title: "Çalışma",
+        type: "study",
+        difficulty: "medium",
+        exercise_count: 6,
+      },
+      {
+        title: "Mini Challenge",
+        type: "mini_challenge",
+        difficulty: "hard",
+        exercise_count: 4,
+      },
+    ],
+  },
+];
+
+const CURRICULUM_OPTIONS = {
+  variants: [
+    {
+      id: 7,
+      exam_id: 4,
+      code: "yks_say",
+      name: "YKS · Sayısal",
+      field_code: "say",
+      sort_order: 1,
+      is_active: true,
+    },
+  ],
+  sections: [
+    { id: 9, exam_id: 4, code: "tyt", name: "TYT", sort_order: 1 },
+    { id: 10, exam_id: 4, code: "ayt", name: "AYT", sort_order: 2 },
+  ],
+};
+
+let curriculumRows = [
+  {
+    course_id: 1,
+    code: "tyt_turkce",
+    name: "TYT Türkçe",
+    status: "published",
+    section_code: "tyt",
+    exam_section_id: 9,
+    sort_order: 1,
+    access: "free",
+    exam_weight: 40,
+    is_required: true,
+  },
+];
+
+const ROLE_OPTIONS = [
+  {
+    value: "super_admin",
+    label: "Süper Yönetici",
+    abilities: SUPER_ADMIN.abilities,
+  },
+  {
+    value: "content_editor",
+    label: "İçerik Editörü",
+    abilities: ADMIN.abilities,
+  },
+  {
+    value: "content_reviewer",
+    label: "İçerik Denetçisi",
+    abilities: REVIEWER.abilities,
+  },
+];
+const ADMIN_ACCOUNTS = [
+  {
+    ...SUPER_ADMIN,
+    role_label: SUPER_ADMIN.role_label,
+    is_active: true,
+    last_login_at: null,
+  },
+  {
+    id: "01a0ab9b-0000-4000-8000-00000000beef",
+    name: "İkinci Yönetici",
+    email: "second@bilgin.test",
+    role: "content_editor",
+    role_label: "İçerik Editörü",
+    is_active: true,
+    last_login_at: null,
+  },
+];
 
 const UNIT_TITLES = Object.fromEntries(
   Object.values(UNITS)
@@ -787,6 +907,7 @@ function adminForRequest(request) {
   const authorization = request.headers.authorization;
   if (authorization === `Bearer ${E2E_BACKEND_TOKEN}`) return ADMIN;
   if (authorization === `Bearer ${REVIEWER_TOKEN}`) return REVIEWER;
+  if (authorization === `Bearer ${SUPER_ADMIN_TOKEN}`) return SUPER_ADMIN;
   return null;
 }
 
@@ -831,6 +952,15 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (body.password === VALID_PASSWORD && body.email === SUPER_ADMIN.email) {
+      send(
+        response,
+        200,
+        envelope({ token: SUPER_ADMIN_TOKEN, admin: SUPER_ADMIN }),
+      );
+      return;
+    }
+
     // Laravel's validation error shape; unknown email and wrong password are
     // deliberately indistinguishable, exactly as the real backend behaves.
     send(response, 422, {
@@ -847,6 +977,276 @@ const server = createServer(async (request, response) => {
     }
 
     send(response, 200, envelope(COURSES));
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/admin/v1/unit-templates"
+  ) {
+    if (adminForRequest(request) === null) {
+      send(response, 401, { message: "Unauthenticated." });
+      return;
+    }
+    send(response, 200, envelope(UNIT_TEMPLATES));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/admin/v1/units") {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_content !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const body = await readBody(request);
+    const course = COURSES.find((item) => item.code === body.course_code);
+    const topicIds = TOPICS[course?.id]?.topics.map((topic) => topic.id) ?? [];
+    if (
+      course === undefined ||
+      !Array.isArray(body.topic_ids) ||
+      body.topic_ids.some((id) => !topicIds.includes(id))
+    ) {
+      send(response, 422, {
+        error: {
+          code: "TOPIC_MISMATCH",
+          message: "Seçilen konu derse ait değil.",
+        },
+      });
+      return;
+    }
+    const template = UNIT_TEMPLATES.find(
+      (item) => item.code === body.template_code,
+    );
+    if (template === undefined) {
+      send(response, 422, { message: "The given data was invalid." });
+      return;
+    }
+    const id = nextUnitId++;
+    const nodes = template.nodes.map((node, index) => ({
+      id: id * 100 + index + 1,
+      title: node.title,
+      type: node.type,
+      exercise_count: node.exercise_count,
+      xp_reward: 10,
+    }));
+    UNITS[course.id].push({
+      id,
+      title: body.title,
+      sort_order: body.sort_order ?? UNITS[course.id].length + 1,
+      grade_level: body.grade_level ?? null,
+      status: "draft",
+      access: "free",
+      node_count: nodes.length,
+      exercise_count: 0,
+    });
+    UNIT_NODES[id] = nodes.map((node, index) => ({
+      ...node,
+      difficulty: template.nodes[index].difficulty,
+      sort_order: index + 1,
+      status: "draft",
+    }));
+    EXERCISES[id] = [];
+    send(
+      response,
+      201,
+      envelope({ id, title: body.title, status: "draft", nodes }),
+    );
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/admin/v1/content/import"
+  ) {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_content !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const body = await readBody(request);
+    const course = COURSES.find((item) => item.code === body.course);
+    if (course === undefined) {
+      send(response, 422, {
+        error: { code: "TOPIC_MISMATCH", message: "Ders bulunamadı." },
+      });
+      return;
+    }
+    const id = nextUnitId++;
+    const nodeCount = 1;
+    const exerciseCount = Array.isArray(body.exercises)
+      ? body.exercises.length
+      : 0;
+    UNITS[course.id].push({
+      id,
+      title: body.unit.title,
+      sort_order: UNITS[course.id].length + 1,
+      grade_level: null,
+      status: "draft",
+      access: "free",
+      node_count: nodeCount,
+      exercise_count: exerciseCount,
+    });
+    UNIT_NODES[id] = [];
+    EXERCISES[id] = [];
+    send(
+      response,
+      201,
+      envelope({
+        unit_id: id,
+        unit_title: body.unit.title,
+        topics: body.topics.length,
+        nodes: nodeCount,
+        exercises: exerciseCount,
+      }),
+    );
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/api/admin/v1/curriculum/options"
+  ) {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_curriculum !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    send(response, 200, envelope(CURRICULUM_OPTIONS));
+    return;
+  }
+
+  const curriculumMatch =
+    /^\/api\/admin\/v1\/exam-variants\/(\d+)\/courses$/.exec(url.pathname);
+  if (curriculumMatch !== null && ["GET", "PUT"].includes(request.method)) {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_curriculum !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    if (Number(curriculumMatch[1]) !== 7) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    if (request.method === "PUT") {
+      const body = await readBody(request);
+      curriculumRows = body.courses.map((row) => {
+        const course = COURSES.find((item) => item.id === row.course_id);
+        const section = CURRICULUM_OPTIONS.sections.find(
+          (item) => item.id === row.exam_section_id,
+        );
+        return {
+          ...row,
+          code: course.code,
+          name: course.name,
+          status: course.status,
+          section_code: section.code,
+        };
+      });
+      send(
+        response,
+        200,
+        envelope({
+          exam_variant: "yks_say",
+          course_count: curriculumRows.length,
+        }),
+      );
+      return;
+    }
+    send(
+      response,
+      200,
+      envelope({
+        exam_variant: { code: "yks_say", name: "YKS · Sayısal" },
+        courses: curriculumRows,
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/admin/v1/admins") {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_curriculum !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    if (request.method === "GET") {
+      send(
+        response,
+        200,
+        envelope({ roles: ROLE_OPTIONS, admins: ADMIN_ACCOUNTS }),
+      );
+      return;
+    }
+    if (request.method === "POST") {
+      const body = await readBody(request);
+      const id = `01a0ab9b-0000-4000-8000-${String(ADMIN_ACCOUNTS.length + 1).padStart(12, "0")}`;
+      const role = ROLE_OPTIONS.find((item) => item.value === body.role);
+      ADMIN_ACCOUNTS.push({
+        id,
+        name: body.name,
+        email: body.email,
+        role: body.role,
+        role_label: role.label,
+        is_active: true,
+        last_login_at: null,
+      });
+      send(response, 201, envelope({ id, email: body.email, role: body.role }));
+      return;
+    }
+  }
+
+  const adminMatch = /^\/api\/admin\/v1\/admins\/([0-9a-f-]+)$/.exec(
+    url.pathname,
+  );
+  if (request.method === "PATCH" && adminMatch !== null) {
+    const acting = adminForRequest(request);
+    if (acting?.abilities.edit_curriculum !== true) {
+      send(response, acting === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const account = ADMIN_ACCOUNTS.find((item) => item.id === adminMatch[1]);
+    if (account === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    const body = await readBody(request);
+    if (
+      account.id === acting.id &&
+      (body.is_active === false ||
+        (body.role !== undefined && body.role !== account.role))
+    ) {
+      send(response, 422, {
+        error: {
+          code: "ADMIN_LOCKOUT_PREVENTED",
+          message: "Kendi hesabınızı kilitleyemezsiniz.",
+        },
+      });
+      return;
+    }
+    Object.assign(account, body);
+    const role = ROLE_OPTIONS.find((item) => item.value === account.role);
+    account.role_label = role.label;
+    send(
+      response,
+      200,
+      envelope({
+        id: account.id,
+        role: account.role,
+        is_active: account.is_active,
+      }),
+    );
     return;
   }
 
@@ -1045,6 +1445,29 @@ const server = createServer(async (request, response) => {
   }
 
   const detailMatch = /^\/api\/admin\/v1\/exercises\/(\d+)$/.exec(url.pathname);
+
+  if (request.method === "DELETE" && detailMatch !== null) {
+    const admin = adminForRequest(request);
+    if (admin?.abilities.edit_content !== true) {
+      send(response, admin === null ? 401 : 403, {
+        error: { code: "FORBIDDEN", message: "Bu işlem için yetkin yok." },
+      });
+      return;
+    }
+    const id = Number(detailMatch[1]);
+    const detail = EXERCISE_DETAILS[id];
+    const row = Object.values(EXERCISES)
+      .flat()
+      .find((item) => item.id === id);
+    if (detail === undefined || row === undefined) {
+      send(response, 404, { message: "Not Found." });
+      return;
+    }
+    detail.status = "archived";
+    row.status = "archived";
+    send(response, 200, envelope({ id, status: "archived" }));
+    return;
+  }
 
   if (request.method === "GET" && detailMatch !== null) {
     if (adminForRequest(request) === null) {
