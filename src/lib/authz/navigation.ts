@@ -18,6 +18,24 @@ export const adminNavigation: readonly NavigationItem[] = [
   // Content reads are open to every authenticated admin on the backend, so this
   // item carries no requiredAbility.
   { id: "content", label: "İçerik", href: "/courses" },
+  {
+    id: "import",
+    label: "JSON İçe Aktar",
+    href: "/content/import",
+    requiredAbility: "edit_content",
+  },
+  {
+    id: "curriculum",
+    label: "Müfredat",
+    href: "/curriculum",
+    requiredAbility: "edit_curriculum",
+  },
+  {
+    id: "admins",
+    label: "Yöneticiler",
+    href: "/admins",
+    requiredAbility: "edit_curriculum",
+  },
 ];
 
 /**

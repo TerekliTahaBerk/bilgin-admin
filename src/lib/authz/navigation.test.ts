@@ -28,6 +28,24 @@ const fixtureItems: readonly NavigationItem[] = [
 const productionNavigation = [
   { id: "home", label: "Ana Sayfa", href: "/" },
   { id: "content", label: "İçerik", href: "/courses" },
+  {
+    id: "import",
+    label: "JSON İçe Aktar",
+    href: "/content/import",
+    requiredAbility: "edit_content",
+  },
+  {
+    id: "curriculum",
+    label: "Müfredat",
+    href: "/curriculum",
+    requiredAbility: "edit_curriculum",
+  },
+  {
+    id: "admins",
+    label: "Yöneticiler",
+    href: "/admins",
+    requiredAbility: "edit_curriculum",
+  },
 ];
 
 describe("adminNavigation", () => {
@@ -35,10 +53,14 @@ describe("adminNavigation", () => {
     expect(adminNavigation).toEqual(productionNavigation);
   });
 
-  it("requires no ability for any production item", () => {
-    expect(
-      adminNavigation.every((item) => item.requiredAbility === undefined),
-    ).toBe(true);
+  it("gates mutation workflows by backend snapshot abilities", () => {
+    expect(adminNavigation.map((item) => item.requiredAbility)).toEqual([
+      undefined,
+      undefined,
+      "edit_content",
+      "edit_curriculum",
+      "edit_curriculum",
+    ]);
   });
 
   it("stays fully visible to an admin with no abilities at all", () => {
@@ -50,7 +72,7 @@ describe("adminNavigation", () => {
     });
 
     expect(filterNavigation(adminNavigation, admin)).toEqual(
-      productionNavigation,
+      productionNavigation.slice(0, 2),
     );
   });
 

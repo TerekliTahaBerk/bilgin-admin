@@ -17,5 +17,12 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Only routes that actually exist and need a session. The proxy still does
   // nothing but check the cookie, decrypt it and honour the local expiry.
-  matcher: ["/", "/courses", "/courses/:path*"],
+  matcher: [
+    "/",
+    "/courses",
+    "/courses/:path*",
+    "/content/:path*",
+    "/curriculum",
+    "/admins",
+  ],
 };
