@@ -29,6 +29,9 @@ export const ADMIN_EXERCISES_TIMEOUT_MS = 10_000;
 export const ADMIN_TOPICS_TIMEOUT_MS = 10_000;
 export const ADMIN_EXERCISE_DETAIL_TIMEOUT_MS = 10_000;
 export const ADMIN_EXERCISE_MUTATION_TIMEOUT_MS = 15_000;
+export const ADMIN_UNIT_NODES_TIMEOUT_MS = 10_000;
+export const ADMIN_NODE_PREVIEW_TIMEOUT_MS = 15_000;
+export const ADMIN_PUBLISH_TIMEOUT_MS = 20_000;
 
 const ADMIN_BACKEND_ENDPOINTS = {
   login: {
@@ -79,6 +82,23 @@ const ADMIN_BACKEND_ENDPOINTS = {
     method: "PATCH",
     path: (exerciseId: number) => `/api/admin/v1/exercises/${exerciseId}`,
     timeoutMs: ADMIN_EXERCISE_MUTATION_TIMEOUT_MS,
+  },
+  unitNodes: {
+    method: "GET",
+    path: (unitId: number) => `/api/admin/v1/units/${unitId}/nodes`,
+    timeoutMs: ADMIN_UNIT_NODES_TIMEOUT_MS,
+  },
+  // A dry run of the selection rule: it counts a real pool query, so it is
+  // given more room than an ordinary read.
+  nodePreview: {
+    method: "GET",
+    path: (nodeId: number) => `/api/admin/v1/nodes/${nodeId}/preview-selection`,
+    timeoutMs: ADMIN_NODE_PREVIEW_TIMEOUT_MS,
+  },
+  publishUnit: {
+    method: "POST",
+    path: (unitId: number) => `/api/admin/v1/units/${unitId}/publish`,
+    timeoutMs: ADMIN_PUBLISH_TIMEOUT_MS,
   },
 } as const;
 
@@ -135,6 +155,18 @@ type AdminBackendRequest =
       operation: "updateExercise";
       exerciseId: number;
       body: UpdateExerciseRequest;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "unitNodes" | "publishUnit";
+      unitId: number;
+      backendToken: string;
+      signal?: AbortSignal;
+    }>
+  | Readonly<{
+      operation: "nodePreview";
+      nodeId: number;
       backendToken: string;
       signal?: AbortSignal;
     }>;
@@ -197,6 +229,21 @@ function endpointPath(request: AdminBackendRequest): string {
   if (request.operation === "topics") {
     return ADMIN_BACKEND_ENDPOINTS.topics.path(
       requireResourceId(request.courseId),
+    );
+  }
+
+  if (
+    request.operation === "unitNodes" ||
+    request.operation === "publishUnit"
+  ) {
+    return ADMIN_BACKEND_ENDPOINTS[request.operation].path(
+      requireResourceId(request.unitId),
+    );
+  }
+
+  if (request.operation === "nodePreview") {
+    return ADMIN_BACKEND_ENDPOINTS.nodePreview.path(
+      requireResourceId(request.nodeId),
     );
   }
 

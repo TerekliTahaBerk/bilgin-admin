@@ -19,6 +19,14 @@ import {
   type UpdateExerciseRequest,
 } from "@/contracts/admin/exercise-editor";
 import {
+  nodePreviewResponseSchema,
+  publishUnitResponseSchema,
+  unitNodesResponseSchema,
+  type NodePreview,
+  type PublishUnitData,
+  type UnitNodesData,
+} from "@/contracts/admin/publication";
+import {
   buildExerciseQuery,
   type ExerciseServerFilters,
 } from "@/features/content/exercise-filters";
@@ -54,6 +62,9 @@ const createExercisePayloadSchema = createExerciseResponseSchema.pick({
 const updateExercisePayloadSchema = updateExerciseResponseSchema.pick({
   data: true,
 });
+const unitNodesPayloadSchema = unitNodesResponseSchema.pick({ data: true });
+const nodePreviewPayloadSchema = nodePreviewResponseSchema.pick({ data: true });
+const publishUnitPayloadSchema = publishUnitResponseSchema.pick({ data: true });
 
 const networkError: ApiError = {
   kind: "network",
@@ -128,9 +139,14 @@ async function requestResource<Value>(
   return parsed.data;
 }
 
+/**
+ * `input === undefined` sends no body and no Content-Type at all. An intent
+ * that carries no data (publishing a unit) should not have to invent an empty
+ * JSON object to be expressible.
+ */
 async function requestMutation<Value>(
   path: string,
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   input: unknown,
   parse: (body: unknown) => ParseResult<Value>,
 ): Promise<Value> {
@@ -141,8 +157,12 @@ async function requestMutation<Value>(
       method,
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      ...(input === undefined
+        ? {}
+        : {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(input),
+          }),
     });
   } catch {
     throw networkError;
@@ -273,6 +293,52 @@ export function updateExercise(
     input,
     (body) => {
       const parsed = updateExercisePayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+  );
+}
+
+export function getUnitNodes(
+  unitId: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<UnitNodesData> {
+  return requestResource(
+    `/api/admin/units/${requireResourceId(unitId)}/nodes`,
+    (body) => {
+      const parsed = unitNodesPayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+    options,
+  );
+}
+
+export function getNodePreview(
+  nodeId: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<NodePreview> {
+  return requestResource(
+    `/api/admin/nodes/${requireResourceId(nodeId)}/preview-selection`,
+    (body) => {
+      const parsed = nodePreviewPayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+    options,
+  );
+}
+
+export function publishUnit(unitId: number): Promise<PublishUnitData> {
+  return requestMutation(
+    `/api/admin/units/${requireResourceId(unitId)}/publish`,
+    "POST",
+    undefined,
+    (body) => {
+      const parsed = publishUnitPayloadSchema.safeParse(body);
       return parsed.success
         ? { success: true, data: parsed.data.data }
         : { success: false };

@@ -15,12 +15,17 @@ import type {
 } from "@/contracts/admin/content";
 import type { ExerciseFilterValues } from "@/features/content/exercise-filter-bar";
 import type { ExerciseServerFilters } from "@/features/content/exercise-filters";
+import type { NodePreview, UnitNodesData } from "@/contracts/admin/publication";
 import type { ApiError } from "@/lib/api/error";
 import {
   validCoursesResponse,
   validUnitsResponse,
 } from "@/test/fixtures/courses-api";
 import { validUnitExercisesResponse } from "@/test/fixtures/exercises-api";
+import {
+  passingPreviewResponse,
+  validUnitNodesResponse,
+} from "@/test/fixtures/publication-api";
 
 const replace = vi.fn();
 const refresh = vi.fn();
@@ -38,12 +43,19 @@ const getUnitExercises =
       filters: ExerciseServerFilters,
     ) => Promise<UnitExercisesData>
   >();
+// The readiness block lives on this page too, so its reads have to be mocked
+// here even though this suite is about the exercise list.
+const getUnitNodes = vi.fn<() => Promise<UnitNodesData>>();
+const getNodePreview = vi.fn<(nodeId: number) => Promise<NodePreview>>();
 
 vi.mock("@/features/content/content-client", () => ({
   getCourses: () => getCourses(),
   getCourseUnits: () => getCourseUnits(),
   getUnitExercises: (unitId: number, filters: ExerciseServerFilters) =>
     getUnitExercises(unitId, filters),
+  getUnitNodes: () => getUnitNodes(),
+  getNodePreview: (nodeId: number) => getNodePreview(nodeId),
+  publishUnit: () => Promise.reject(new Error("not used in this suite")),
 }));
 
 const { ExercisesBrowser } =
@@ -58,7 +70,11 @@ const UNIT_ID = units[0]!.id;
 const onFiltersChange = vi.fn();
 const onClearFilters = vi.fn();
 
-function renderBrowser(filters: ExerciseFilterValues = {}, canEdit = false) {
+function renderBrowser(
+  filters: ExerciseFilterValues = {},
+  canEdit = false,
+  canPublish = false,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -67,6 +83,7 @@ function renderBrowser(filters: ExerciseFilterValues = {}, canEdit = false) {
     <QueryClientProvider client={queryClient}>
       <ExercisesBrowser
         canEdit={canEdit}
+        canPublish={canPublish}
         courseId={COURSE_ID}
         filters={filters}
         onClearFilters={onClearFilters}
@@ -83,6 +100,7 @@ function renderBrowser(filters: ExerciseFilterValues = {}, canEdit = false) {
         <QueryClientProvider client={queryClient}>
           <ExercisesBrowser
             canEdit={canEdit}
+            canPublish={canPublish}
             courseId={COURSE_ID}
             filters={next}
             onClearFilters={onClearFilters}
@@ -107,6 +125,12 @@ beforeEach(() => {
   getCourses.mockReset().mockResolvedValue(courses);
   getCourseUnits.mockReset().mockResolvedValue(units);
   getUnitExercises.mockReset().mockResolvedValue(unitData());
+  getUnitNodes
+    .mockReset()
+    .mockResolvedValue(validUnitNodesResponse.data as UnitNodesData);
+  getNodePreview
+    .mockReset()
+    .mockResolvedValue(passingPreviewResponse.data as NodePreview);
   replace.mockReset();
   refresh.mockReset();
   onFiltersChange.mockReset();
@@ -166,12 +190,13 @@ describe("ExercisesBrowser rows", () => {
   });
 
   it("labels every exercise type in Turkish", async () => {
-    const { container } = renderBrowser();
+    renderBrowser();
 
     await screen.findByText("(önizleme yok)");
 
-    // Scoped to the list: the filter selects carry the same labels as options.
-    const list = within(container.querySelector("ul")!);
+    // Scoped by accessible name: the filter selects carry the same labels as
+    // options, and the readiness block on this page has a list of its own.
+    const list = within(screen.getByRole("list", { name: "Sorular" }));
 
     for (const label of [
       "Çoktan Seçmeli",
@@ -185,11 +210,11 @@ describe("ExercisesBrowser rows", () => {
   });
 
   it("shows topic, difficulty, status and scopes", async () => {
-    const { container } = renderBrowser();
+    renderBrowser();
 
     await screen.findByText("(önizleme yok)");
 
-    const list = within(container.querySelector("ul")!);
+    const list = within(screen.getByRole("list", { name: "Sorular" }));
 
     expect(list.getAllByText("İlk Türk Devletleri").length).toBeGreaterThan(0);
     expect(list.getAllByText("Zorluk 2").length).toBeGreaterThan(0);
@@ -250,13 +275,15 @@ describe("ExercisesBrowser rows", () => {
   });
 
   it("puts the flagged exercises first while keeping backend order", async () => {
-    const { container } = renderBrowser();
+    renderBrowser();
 
     await screen.findByText("(önizleme yok)");
 
-    const previews = [...container.querySelectorAll("li p:first-child")].map(
-      (node) => node.textContent,
-    );
+    const previews = [
+      ...screen
+        .getByRole("list", { name: "Sorular" })
+        .querySelectorAll("li p:first-child"),
+    ].map((node) => node.textContent);
 
     expect(previews[0]).toBe(
       "Uygurlar yerleşik hayata geçen ilk Türk devletidir.",

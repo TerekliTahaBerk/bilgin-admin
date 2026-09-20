@@ -37,6 +37,7 @@ import {
   topicOptions,
 } from "@/features/content/exercise-list";
 import { StatusBadge } from "@/features/content/status-badges";
+import { UnitReadiness } from "@/features/content/unit-readiness";
 import type { ApiError } from "@/lib/api/error";
 
 function BackLink({ courseId }: { courseId: number }) {
@@ -220,6 +221,7 @@ function ErrorState({
 
 export type ExercisesBrowserProps = Readonly<{
   canEdit: boolean;
+  canPublish: boolean;
   courseId: number;
   unitId: number;
   filters: ExerciseFilterValues;
@@ -229,6 +231,7 @@ export type ExercisesBrowserProps = Readonly<{
 
 export function ExercisesBrowser({
   canEdit,
+  canPublish,
   courseId,
   unitId,
   filters,
@@ -438,7 +441,10 @@ export function ExercisesBrowser({
               </div>
             </dl>
 
-            <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+            <ul
+              aria-label="Sorular"
+              className="divide-y divide-border rounded-lg border border-border bg-surface"
+            >
               {visible.map((exercise) => (
                 <ExerciseRow
                   canEdit={canEdit}
@@ -458,6 +464,11 @@ export function ExercisesBrowser({
   return (
     <>
       {header}
+      <UnitReadiness
+        canPublish={canPublish}
+        courseId={courseId}
+        unitId={unitId}
+      />
       <div className="mt-6">{body()}</div>
     </>
   );
