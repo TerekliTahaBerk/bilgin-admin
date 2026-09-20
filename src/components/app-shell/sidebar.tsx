@@ -1,6 +1,14 @@
 "use client";
 
-import { Circle, Home, Library, type LucideIcon } from "lucide-react";
+import {
+  Circle,
+  FileJson,
+  GraduationCap,
+  Home,
+  Library,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +26,9 @@ import {
 const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   home: Home,
   content: Library,
+  import: FileJson,
+  curriculum: GraduationCap,
+  admins: ShieldCheck,
 };
 
 export function BrandMark() {

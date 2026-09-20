@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { UnitsBrowser } from "@/features/content/units-browser";
+import { can } from "@/lib/authz/abilities";
 import { parseResourceId } from "@/lib/api/resource-id";
+import { requireCurrentAdmin } from "@/lib/session/current";
 
 export default async function CourseUnitsPage({
   params,
@@ -15,9 +17,10 @@ export default async function CourseUnitsPage({
     notFound();
   }
 
+  const admin = await requireCurrentAdmin();
   return (
     <section>
-      <UnitsBrowser courseId={courseId} />
+      <UnitsBrowser canEdit={can(admin, "edit_content")} courseId={courseId} />
     </section>
   );
 }

@@ -1,3 +1,5 @@
 .next
 node_modules
+.pnpm-store
+.vercel
 pnpm-lock.yaml

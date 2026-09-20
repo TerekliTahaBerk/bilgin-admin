@@ -15,6 +15,7 @@ import {
   createResourceSuccessResponse,
   createSessionErrorResponse,
 } from "@/lib/session/http";
+import { adminWorkflows } from "@/lib/backend/admin-workflows";
 
 function invalidExerciseId() {
   return createSessionErrorResponse(
@@ -83,5 +84,26 @@ export async function PATCH(
       : createSessionErrorResponse(result.error);
   }
 
+  return createResourceSuccessResponse(result.data.data);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ exerciseId: string }> },
+) {
+  if (!verifyOrigin(request.headers.get("origin")))
+    return createOriginRejectedResponse();
+  const exerciseId = parseResourceId((await params).exerciseId);
+  if (exerciseId === null) return invalidExerciseId();
+  const session = await readEditorBffSession(request);
+  if (!session.ok) return session.response;
+  const result = await adminWorkflows.archiveExercise(
+    exerciseId,
+    session.session.backendToken,
+  );
+  if (!result.ok)
+    return result.error.kind === "authentication"
+      ? clearSessionForBackendAuthentication()
+      : createSessionErrorResponse(result.error);
   return createResourceSuccessResponse(result.data.data);
 }

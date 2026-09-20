@@ -62,7 +62,7 @@ export function resourceRequest(
 export function mutationRequest(
   path: string,
   seal: string | null,
-  method: "POST" | "PATCH",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   body: unknown,
   extraHeaders: Record<string, string> = { origin: APP_ORIGIN },
 ): NextRequest {

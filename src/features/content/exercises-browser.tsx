@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,7 +18,11 @@ import {
 } from "@/features/content/content-labels";
 import {
   courseUnitsQueryOptions,
+  courseUnitsQueryKey,
+  exerciseDetailQueryKey,
+  nodePreviewQueryPrefix,
   coursesQueryOptions,
+  unitExercisesQueryPrefix,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
 import {
@@ -39,6 +43,7 @@ import {
 import { StatusBadge } from "@/features/content/status-badges";
 import { UnitReadiness } from "@/features/content/unit-readiness";
 import type { ApiError } from "@/lib/api/error";
+import { archiveExercise } from "@/features/workflows/workflow-client";
 
 function BackLink({ courseId }: { courseId: number }) {
   return (
@@ -72,11 +77,15 @@ function ExerciseRow({
   canEdit,
   courseId,
   exercise,
+  isArchiving,
+  onArchive,
   unitId,
 }: {
   canEdit: boolean;
   courseId: number;
   exercise: ExerciseListItem;
+  isArchiving: boolean;
+  onArchive: () => void;
   unitId: number;
 }) {
   return (
@@ -123,14 +132,26 @@ function ExerciseRow({
       </div>
 
       <StatsLine exercise={exercise} />
-      {canEdit && isSupportedEditorType(exercise.type) ? (
-        <div>
-          <Link
-            className="text-xs font-semibold text-primary hover:underline"
-            href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
-          >
-            Düzenle
-          </Link>
+      {canEdit ? (
+        <div className="flex gap-3">
+          {isSupportedEditorType(exercise.type) ? (
+            <Link
+              className="text-xs font-semibold text-primary hover:underline"
+              href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
+            >
+              Düzenle
+            </Link>
+          ) : null}
+          {exercise.status === "archived" ? null : (
+            <button
+              className="text-xs font-semibold text-danger hover:underline disabled:opacity-60"
+              disabled={isArchiving}
+              onClick={onArchive}
+              type="button"
+            >
+              {isArchiving ? "Arşivleniyor…" : "Arşivle"}
+            </button>
+          )}
         </div>
       ) : null}
     </li>
@@ -239,6 +260,25 @@ export function ExercisesBrowser({
   onClearFilters,
 }: ExercisesBrowserProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const archiveMutation = useMutation({
+    mutationFn: archiveExercise,
+    retry: 0,
+    onSuccess: async (_data, exerciseId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: unitExercisesQueryPrefix(unitId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: courseUnitsQueryKey(courseId),
+        }),
+        queryClient.invalidateQueries({ queryKey: nodePreviewQueryPrefix }),
+        queryClient.invalidateQueries({
+          queryKey: exerciseDetailQueryKey(exerciseId),
+        }),
+      ]);
+    },
+  });
 
   // All three queries start together; the exercise request never waits on
   // course or unit metadata.
@@ -450,7 +490,19 @@ export function ExercisesBrowser({
                   canEdit={canEdit}
                   courseId={courseId}
                   exercise={exercise}
+                  isArchiving={
+                    archiveMutation.isPending &&
+                    archiveMutation.variables === exercise.id
+                  }
                   key={exercise.id}
+                  onArchive={() => {
+                    if (
+                      window.confirm(
+                        "Bu soruyu arşivlemek istiyor musunuz? Yeni oturumlar soruyu kullanmaz; geçmiş kayıtları korunur.",
+                      )
+                    )
+                      archiveMutation.mutate(exercise.id);
+                  }}
                   unitId={unitId}
                 />
               ))}
