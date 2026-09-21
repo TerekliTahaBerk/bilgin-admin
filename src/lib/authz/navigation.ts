@@ -18,6 +18,10 @@ export const adminNavigation: readonly NavigationItem[] = [
   // Content reads are open to every authenticated admin on the backend, so this
   // item carries no requiredAbility.
   { id: "content", label: "İçerik", href: "/courses" },
+  // Same content reads, charted. The page's admin-roster section gates
+  // itself internally (`can(admin, "edit_curriculum")`), same as the item
+  // below, so the nav entry itself needs no requiredAbility.
+  { id: "analytics", label: "Veri Paneli", href: "/analytics" },
   {
     id: "import",
     label: "JSON İçe Aktar",

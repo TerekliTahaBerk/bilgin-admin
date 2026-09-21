@@ -28,6 +28,7 @@ const fixtureItems: readonly NavigationItem[] = [
 const productionNavigation = [
   { id: "home", label: "Ana Sayfa", href: "/" },
   { id: "content", label: "İçerik", href: "/courses" },
+  { id: "analytics", label: "Veri Paneli", href: "/analytics" },
   {
     id: "import",
     label: "JSON İçe Aktar",
@@ -57,6 +58,7 @@ describe("adminNavigation", () => {
     expect(adminNavigation.map((item) => item.requiredAbility)).toEqual([
       undefined,
       undefined,
+      undefined,
       "edit_content",
       "edit_curriculum",
       "edit_curriculum",
@@ -72,7 +74,7 @@ describe("adminNavigation", () => {
     });
 
     expect(filterNavigation(adminNavigation, admin)).toEqual(
-      productionNavigation.slice(0, 2),
+      productionNavigation.slice(0, 3),
     );
   });
 
