@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import type { Course } from "@/contracts/admin/content";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { coursesQueryOptions } from "@/features/content/content-queries";
+import { courseScopeLabels, publishStatusLabels } from "@/features/content/content-labels";
 import { StatusBadge } from "@/features/content/status-badges";
 import {
   groupCoursesByScope,
@@ -15,6 +17,15 @@ import {
   summarizeCourses,
 } from "@/features/content/courses-summary";
 import type { ApiError } from "@/lib/api/error";
+import type { CsvColumn } from "@/lib/export/csv";
+
+const COURSE_CSV_COLUMNS: readonly CsvColumn<Course>[] = [
+  { header: "Kod", value: (course) => course.code },
+  { header: "Ad", value: (course) => course.name },
+  { header: "Kapsam", value: (course) => courseScopeLabels[course.scope] },
+  { header: "Durum", value: (course) => publishStatusLabels[course.status] },
+  { header: "Ünite Sayısı", value: (course) => course.unit_count },
+];
 
 function SummaryStrip({ courses }: { courses: readonly Course[] }) {
   const summary = summarizeCourses(courses);
@@ -222,7 +233,14 @@ export function CoursesBrowser() {
 
   return (
     <div className="space-y-6">
-      <SummaryStrip courses={query.data} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SummaryStrip courses={query.data} />
+        <ExportCsvButton
+          columns={COURSE_CSV_COLUMNS}
+          filename="dersler.csv"
+          rows={query.data}
+        />
+      </div>
       {groupCoursesByScope(query.data).map((group) => (
         <ScopeGroup
           courses={group.courses}

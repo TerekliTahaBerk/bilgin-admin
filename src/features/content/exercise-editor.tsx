@@ -64,6 +64,13 @@ import {
 } from "@/features/content/editor-form";
 import { FieldError } from "@/features/content/editor-field-error";
 import {
+  clearDraft,
+  exerciseDraftKey,
+  loadDraft,
+  saveDraft,
+} from "@/features/content/exercise-draft-storage";
+import { recordExerciseEdit } from "@/features/content/exercise-history";
+import {
   FillBlankFields,
   FillBlankPreview,
 } from "@/features/content/fill-blank-section";
@@ -95,6 +102,14 @@ import {
   TrueFalseFields,
   TrueFalsePreview,
 } from "@/features/content/true-false-section";
+import {
+  ImageHotspotFields,
+  ImageHotspotPreview,
+} from "@/features/content/image-hotspot-section";
+import {
+  DiagramLabelFields,
+  DiagramLabelPreview,
+} from "@/features/content/diagram-label-section";
 import { StatusBadge } from "@/features/content/status-badges";
 import type { ApiError } from "@/lib/api/error";
 
@@ -186,6 +201,22 @@ const SERVER_FIELD_PATHS: Record<
     content: "wordOrder.instruction",
     answer_key: "wordOrder.order",
   },
+  image_hotspot: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "imageHotspot.instruction",
+    answer_key: "imageHotspot.hotspotId",
+  },
+  diagram_label: {
+    topic_id: "topicId",
+    difficulty: "difficulty",
+    explanation: "explanation",
+    applicable_scopes: "scopes",
+    content: "diagramLabel.instruction",
+    answer_key: "diagramLabel.slots",
+  },
 };
 
 /**
@@ -240,6 +271,16 @@ const EDITOR_SECTIONS: Record<
     heading: "Kelime sıralama içeriği",
     Fields: WordOrderFields,
     Preview: WordOrderPreview,
+  },
+  image_hotspot: {
+    heading: "Görsel ve bölgeler",
+    Fields: ImageHotspotFields,
+    Preview: ImageHotspotPreview,
+  },
+  diagram_label: {
+    heading: "Görsel ve etiket yerleri",
+    Fields: DiagramLabelFields,
+    Preview: DiagramLabelPreview,
   },
 };
 
@@ -338,6 +379,13 @@ export function ExerciseEditor({
   const hydratedExercise = useRef<number | null>(null);
   const scopedCreateDefaults = useRef(false);
   const mutationInFlight = useRef(false);
+  const draftKey = useMemo(
+    () => exerciseDraftKey(courseId, unitId, exerciseId),
+    [courseId, unitId, exerciseId],
+  );
+  const [recoverableDraft, setRecoverableDraft] = useState(() =>
+    loadDraft(draftKey),
+  );
 
   const form = useForm<EditorFormValues>({
     resolver: zodResolver(editorFormSchema),
@@ -349,6 +397,18 @@ export function ExerciseEditor({
   useWatch({ control: form.control });
   const values = form.getValues();
   const activeType = values.type;
+
+  // Debounced local-only backup: only once real edits exist (isDirty), so a
+  // hydration reset or the initial defaults are never mistaken for a draft.
+  useEffect(() => {
+    if (!form.formState.isDirty) return;
+
+    const timeout = window.setTimeout(() => {
+      saveDraft(draftKey, values);
+    }, 800);
+
+    return () => window.clearTimeout(timeout);
+  }, [draftKey, form.formState.isDirty, values]);
 
   const coursesQuery = useQuery<Course[], ApiError>(coursesQueryOptions());
   const unitsQuery = useQuery<Unit[], ApiError>(
@@ -495,6 +555,14 @@ export function ExerciseEditor({
           serializeCreateExercise(input, unitId),
         );
         await invalidateAfterSave();
+        recordExerciseEdit({
+          exerciseId: result.id,
+          courseId,
+          unitId,
+          label: `${course?.name ?? "Ders"} · ${unit?.title ?? "Ünite"}`,
+          editedAt: Date.now(),
+        });
+        clearDraft(draftKey);
 
         if (intent === "save-new") {
           // The next question keeps the shared context and the editor type,
@@ -523,6 +591,14 @@ export function ExerciseEditor({
         values: input,
       });
       await invalidateAfterSave();
+      recordExerciseEdit({
+        exerciseId,
+        courseId,
+        unitId,
+        label: `${course?.name ?? "Ders"} · ${unit?.title ?? "Ünite"}`,
+        editedAt: Date.now(),
+      });
+      clearDraft(draftKey);
 
       if (intent === "save-new") {
         preserveEditorDefaults(input);
@@ -687,6 +763,41 @@ export function ExerciseEditor({
           </div>
         </div>
       </header>
+
+      {recoverableDraft === null ? null : (
+        <div
+          className="flex flex-col gap-2 rounded-md border border-primary/25 bg-primary-soft px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <span>
+            Bu soru için kaydedilmemiş bir taslak bulundu (
+            {new Date(recoverableDraft.savedAt).toLocaleString("tr-TR")}
+            ).
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+              onClick={() => {
+                form.reset(recoverableDraft.values);
+                setRecoverableDraft(null);
+              }}
+              type="button"
+            >
+              Taslağı Geri Yükle
+            </button>
+            <button
+              className="rounded-md border border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary"
+              onClick={() => {
+                clearDraft(draftKey);
+                setRecoverableDraft(null);
+              }}
+              type="button"
+            >
+              Yoksay
+            </button>
+          </div>
+        </div>
+      )}
 
       {warning === null ? null : (
         <div

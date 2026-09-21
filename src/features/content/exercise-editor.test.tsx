@@ -370,14 +370,15 @@ describe("multiple choice edit editor", () => {
   });
 
   it("renders a safe unsupported-type state without a mutation form", async () => {
-    // image_hotspot needs media infrastructure that does not exist yet; it
-    // stays readable but not editable.
+    // A hypothetical future backend type this editor does not know about yet
+    // (every currently-defined type is supported). The mock bypasses the
+    // detail schema's own enum validation to exercise this fallback directly.
     getExerciseDetail.mockResolvedValue({
       ...detail,
-      type: "image_hotspot",
-      content: { image_url: "/x.png", regions: [{ id: "a", shape: "rect" }] },
-      answer_key: { region_id: "a" },
-    });
+      type: "essay_response",
+      content: { prompt: "x" },
+      answer_key: {},
+    } as unknown as ExerciseDetail);
     renderEditor(101);
     expect(
       await screen.findByRole("heading", {

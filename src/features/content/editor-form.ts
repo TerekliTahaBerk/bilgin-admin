@@ -64,6 +64,20 @@ import {
   trueFalseBranchFromDetail,
   trueFalseBranchSchema,
 } from "@/features/content/true-false-form";
+import {
+  createImageHotspotBranch,
+  imageHotspotBranchFromDetail,
+  imageHotspotBranchSchema,
+  serializeImageHotspotBranch,
+  strictImageHotspotBranchSchema,
+} from "@/features/content/image-hotspot-form";
+import {
+  createDiagramLabelBranch,
+  diagramLabelBranchFromDetail,
+  diagramLabelBranchSchema,
+  serializeDiagramLabelBranch,
+  strictDiagramLabelBranchSchema,
+} from "@/features/content/diagram-label-form";
 
 export const editorTypeLabels: Record<SupportedEditorType, string> = {
   multiple_choice: "Çoktan seçmeli",
@@ -74,6 +88,8 @@ export const editorTypeLabels: Record<SupportedEditorType, string> = {
   matching: "Eşleştirme",
   ordering: "Sıralama",
   word_order: "Kelime sıralama",
+  image_hotspot: "Görsel üzerinde bölge",
+  diagram_label: "Diyagram etiketleme",
 };
 
 export const editorTypeHeadings: Record<
@@ -112,6 +128,14 @@ export const editorTypeHeadings: Record<
     create: "Yeni kelime sıralama sorusu",
     edit: "Kelime sıralama sorusunu düzenle",
   },
+  image_hotspot: {
+    create: "Yeni görsel bölge sorusu",
+    edit: "Görsel bölge sorusunu düzenle",
+  },
+  diagram_label: {
+    create: "Yeni diyagram etiketleme sorusu",
+    edit: "Diyagram etiketleme sorusunu düzenle",
+  },
 };
 
 /**
@@ -142,6 +166,8 @@ const branchKeyByType = {
   matching: "matching",
   ordering: "ordering",
   word_order: "wordOrder",
+  image_hotspot: "imageHotspot",
+  diagram_label: "diagramLabel",
 } as const;
 
 const strictBranchByType = {
@@ -153,6 +179,8 @@ const strictBranchByType = {
   matching: strictMatchingBranchSchema,
   ordering: strictOrderingBranchSchema,
   word_order: strictWordOrderBranchSchema,
+  image_hotspot: strictImageHotspotBranchSchema,
+  diagram_label: strictDiagramLabelBranchSchema,
 } as const;
 
 /**
@@ -171,6 +199,8 @@ export const editorFormSchema = commonEditorFieldsSchema
       "matching",
       "ordering",
       "word_order",
+      "image_hotspot",
+      "diagram_label",
     ]),
     multipleChoice: multipleChoiceBranchSchema,
     trueFalse: trueFalseBranchSchema,
@@ -180,6 +210,8 @@ export const editorFormSchema = commonEditorFieldsSchema
     matching: matchingBranchSchema,
     ordering: orderingBranchSchema,
     wordOrder: wordOrderBranchSchema,
+    imageHotspot: imageHotspotBranchSchema,
+    diagramLabel: diagramLabelBranchSchema,
   })
   .superRefine((values, context) => {
     const key = branchKeyByType[values.type];
@@ -226,6 +258,8 @@ export function createEditorDefaults(
     matching: createMatchingBranch(),
     ordering: createOrderingBranch(),
     wordOrder: createWordOrderBranch(),
+    imageHotspot: createImageHotspotBranch(),
+    diagramLabel: createDiagramLabelBranch(),
   };
 }
 
@@ -294,8 +328,18 @@ export function formValuesFromDetail(
     return branch === null ? null : { ...common, ordering: branch };
   }
 
-  const branch = wordOrderBranchFromDetail(detail);
-  return branch === null ? null : { ...common, wordOrder: branch };
+  if (detail.type === "word_order") {
+    const branch = wordOrderBranchFromDetail(detail);
+    return branch === null ? null : { ...common, wordOrder: branch };
+  }
+
+  if (detail.type === "image_hotspot") {
+    const branch = imageHotspotBranchFromDetail(detail);
+    return branch === null ? null : { ...common, imageHotspot: branch };
+  }
+
+  const branch = diagramLabelBranchFromDetail(detail);
+  return branch === null ? null : { ...common, diagramLabel: branch };
 }
 
 function editablePayload(values: EditorFormValues) {
@@ -342,7 +386,15 @@ function editablePayload(values: EditorFormValues) {
     return { ...serializeOrderingBranch(values.ordering), ...common };
   }
 
-  return { ...serializeWordOrderBranch(values.wordOrder), ...common };
+  if (values.type === "word_order") {
+    return { ...serializeWordOrderBranch(values.wordOrder), ...common };
+  }
+
+  if (values.type === "image_hotspot") {
+    return { ...serializeImageHotspotBranch(values.imageHotspot), ...common };
+  }
+
+  return { ...serializeDiagramLabelBranch(values.diagramLabel), ...common };
 }
 
 export function serializeCreateExercise(

@@ -4,18 +4,40 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import type {
+  AdminAccountsData,
   CreateAdminRequest,
   UpdateAdminRequest,
 } from "@/contracts/admin/workflows";
 import type { SafeAdmin } from "@/contracts/admin/session";
+import { ExportCsvButton } from "@/components/export-csv-button";
+import {
+  wouldDemoteSoloManager,
+  wouldLeaveSoloManager,
+} from "@/features/workflows/admin-lockout";
 import {
   createAdminAccount,
   getAdminAccounts,
   updateAdminAccount,
 } from "@/features/workflows/workflow-client";
 import type { ApiError } from "@/lib/api/error";
+import type { CsvColumn } from "@/lib/export/csv";
 
 const input = "rounded-md border border-border bg-surface px-3 py-2 text-sm";
+type AdminRow = AdminAccountsData["admins"][number];
+
+const ADMIN_CSV_COLUMNS: readonly CsvColumn<AdminRow>[] = [
+  { header: "Ad", value: (admin) => admin.name },
+  { header: "E-posta", value: (admin) => admin.email },
+  { header: "Rol", value: (admin) => admin.role_label },
+  { header: "Durum", value: (admin) => (admin.is_active ? "Aktif" : "Pasif") },
+  {
+    header: "Son giriş",
+    value: (admin) =>
+      admin.last_login_at === null
+        ? ""
+        : new Date(admin.last_login_at).toLocaleString("tr-TR"),
+  },
+];
 const abilityLabels = {
   edit_content: "İçerik düzenleme",
   publish_content: "Yayınlama",
@@ -58,7 +80,14 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">Yönetici hesapları</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Yönetici hesapları</h1>
+        <ExportCsvButton
+          columns={ADMIN_CSV_COLUMNS}
+          filename="yoneticiler.csv"
+          rows={query.data?.admins ?? []}
+        />
+      </div>
       <form
         className="mt-6 grid gap-3 rounded-lg border border-border bg-surface p-5 sm:grid-cols-2 lg:grid-cols-4"
         method="post"
@@ -191,15 +220,24 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
                         <button
                           className="text-sm font-semibold text-danger"
                           onClick={() => {
-                            if (
-                              window.confirm(
-                                "Bu yönetici hesabını pasif yapmak istiyor musunuz?",
-                              )
-                            )
+                            const solo =
+                              query.data !== undefined &&
+                              wouldLeaveSoloManager(
+                                query.data.admins,
+                                query.data.roles,
+                                admin,
+                                currentAdmin.id,
+                              );
+                            const message = solo
+                              ? "Bu, yönetici hesaplarını yönetebilecek son kişi olarak sizi tek başınıza bırakacak. Bu yöneticiyi pasif yapmak istiyor musunuz?"
+                              : "Bu yönetici hesabını pasif yapmak istiyor musunuz?";
+
+                            if (window.confirm(message)) {
                               update.mutate({
                                 id: admin.id,
                                 body: { is_active: false },
                               });
+                            }
                           }}
                           type="button"
                         >
@@ -231,6 +269,25 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
                     event.preventDefault();
                     const data = new FormData(event.currentTarget);
                     const password = String(data.get("password") ?? "");
+
+                    const solo =
+                      query.data !== undefined &&
+                      wouldDemoteSoloManager(
+                        query.data.admins,
+                        query.data.roles,
+                        admin,
+                        editRole,
+                        currentAdmin.id,
+                      );
+                    if (
+                      solo &&
+                      !window.confirm(
+                        "Bu rol değişikliği, yönetici hesaplarını yönetebilecek son kişi olarak sizi tek başınıza bırakacak. Devam etmek istiyor musunuz?",
+                      )
+                    ) {
+                      return;
+                    }
+
                     update.mutate({
                       id: admin.id,
                       body: {

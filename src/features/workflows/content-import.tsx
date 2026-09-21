@@ -14,12 +14,19 @@ import {
   parseContentPackage,
 } from "@/features/workflows/workflow-client";
 import type { ApiError } from "@/lib/api/error";
+import { csvToMultipleChoiceExercises } from "@/lib/import/csv-to-exercises";
 
 export function ContentImport() {
   const queryClient = useQueryClient();
   const [raw, setRaw] = useState("");
   const [parsed, setParsed] = useState<ContentPackage | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [tableRaw, setTableRaw] = useState("");
+  const [tableJson, setTableJson] = useState<string | null>(null);
+  const [tableErrors, setTableErrors] = useState<readonly string[]>([]);
+  const [tableCount, setTableCount] = useState(0);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [mergeStatus, setMergeStatus] = useState<string | null>(null);
   const mutation = useMutation<ImportContentResult, ApiError, ContentPackage>({
     mutationFn: importContent,
     retry: 0,
@@ -36,6 +43,55 @@ export function ContentImport() {
     const result = parseContentPackage(value);
     if (result.success) setParsed(result.data);
     else setParseError(result.message);
+  }
+
+  function convertTable(value: string) {
+    setTableRaw(value);
+    setCopyStatus(null);
+    setMergeStatus(null);
+    if (!value.trim()) {
+      setTableJson(null);
+      setTableErrors([]);
+      setTableCount(0);
+      return;
+    }
+    const result = csvToMultipleChoiceExercises(value);
+    setTableErrors(result.errors);
+    setTableCount(result.exercises.length);
+    setTableJson(
+      result.exercises.length > 0
+        ? JSON.stringify(result.exercises, null, 2)
+        : null,
+    );
+  }
+
+  async function copyTableJson() {
+    if (!tableJson) return;
+    try {
+      await navigator.clipboard.writeText(tableJson);
+      setCopyStatus("Panoya kopyalandı.");
+    } catch {
+      setCopyStatus("Panoya kopyalanamadı. Metni elle seçip kopyalayın.");
+    }
+  }
+
+  function mergeTableIntoPackage() {
+    if (!parsed) {
+      setMergeStatus(
+        "Önce soldaki alana geçerli bir JSON paketi girin, sonra eklemeyi deneyin.",
+      );
+      return;
+    }
+    const result = csvToMultipleChoiceExercises(tableRaw);
+    if (result.exercises.length === 0) return;
+    const merged: ContentPackage = {
+      ...parsed,
+      exercises: [...parsed.exercises, ...result.exercises],
+    };
+    preview(JSON.stringify(merged, null, 2));
+    setMergeStatus(
+      `${result.exercises.length} soru pakete eklendi. Sol taraftaki JSON güncellendi.`,
+    );
   }
 
   return (
@@ -133,6 +189,81 @@ export function ContentImport() {
           ) : null}
         </section>
       </div>
+      <section className="mt-6 rounded-lg border border-border bg-surface p-5">
+        <h2 className="font-semibold">Tablo yapıştır (çoktan seçmeli)</h2>
+        <p className="mt-1 text-sm text-muted">
+          Excel/Sheets&apos;ten kopyaladığınız (sekmeyle ayrılmış) ya da
+          virgülle ayrılmış bir tabloyu buraya yapıştırın. Beklenen sütunlar:{" "}
+          <code className="text-xs">
+            topic, stem, option_a, option_b, option_c, option_d, correct
+          </code>{" "}
+          (opsiyonel: <code className="text-xs">difficulty</code>,{" "}
+          <code className="text-xs">explanation</code>).
+        </p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <textarea
+            aria-label="Tablo yapıştırma alanı"
+            className="min-h-48 w-full rounded-md border border-border bg-surface p-3 font-mono text-xs"
+            onChange={(event) => convertTable(event.target.value)}
+            placeholder="topic	stem	option_a	option_b	option_c	option_d	correct"
+            spellCheck={false}
+            value={tableRaw}
+          />
+          <div>
+            {tableErrors.length > 0 ? (
+              <ul className="space-y-1 text-sm text-danger" role="alert">
+                {tableErrors.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            ) : null}
+            {tableJson ? (
+              <>
+                <p className="text-sm text-muted">
+                  {tableCount} soru dönüştürüldü.
+                </p>
+                <textarea
+                  className="mt-2 min-h-32 w-full rounded-md border border-border bg-surface p-3 font-mono text-xs"
+                  readOnly
+                  spellCheck={false}
+                  value={tableJson}
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    className="rounded-md border border-border px-3 py-2 text-sm font-semibold"
+                    onClick={() => void copyTableJson()}
+                    type="button"
+                  >
+                    JSON&apos;u kopyala
+                  </button>
+                  <button
+                    className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white"
+                    onClick={mergeTableIntoPackage}
+                    type="button"
+                  >
+                    Soldaki pakete ekle
+                  </button>
+                </div>
+                {copyStatus ? (
+                  <p className="mt-2 text-sm text-muted" role="status">
+                    {copyStatus}
+                  </p>
+                ) : null}
+                {mergeStatus ? (
+                  <p className="mt-2 text-sm text-muted" role="status">
+                    {mergeStatus}
+                  </p>
+                ) : null}
+              </>
+            ) : tableErrors.length === 0 ? (
+              <p className="text-sm text-muted">
+                Tablo yapıştırıldığında dönüştürülen sorular burada
+                görünecek.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

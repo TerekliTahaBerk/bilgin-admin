@@ -3,16 +3,34 @@
 /*
  * A small set of semantic tokens — not a design system. Tailwind v4 turns each
  * `--color-*` entry into a utility (`bg-surface`, `text-muted`, `border-border`).
+ *
+ * `primary` and `accent` are picked from the app's mascot logo (a dark
+ * forest-green dinosaur with mint-green spikes and belly): `primary` is the
+ * dark body green, `accent` the lighter mint used for its highlights.
+ * Every other token is a neutral tinted just enough toward that same green to
+ * read as one family instead of a blue admin theme with a green logo pasted
+ * on top.
  */
 @theme {
-  --color-background: #f5f6f8;
+  --color-background: #f4f8f6;
   --color-surface: #ffffff;
-  --color-surface-muted: #fafafb;
-  --color-foreground: #111827;
-  --color-muted: #667085;
-  --color-border: #e4e7ec;
-  --color-primary: #1d4ed8;
-  --color-primary-soft: #eef3ff;
+  --color-surface-muted: #f1f7f4;
+  --color-foreground: #10201a;
+  --color-muted: #5b6f68;
+  --color-border: #dce7e1;
+
+  --color-primary: #0b6b4f;
+  --color-primary-soft: #e3f5ec;
+  --color-primary-foreground: #ffffff;
+
+  --color-accent: #4fbe8a;
+  --color-accent-soft: #eafbf3;
+
+  /* Referenced across the panel (destructive actions, failed-request
+     banners) but never previously themed — Tailwind silently produced no
+     color at all for `text-danger`/`bg-danger`/`border-danger` until now. */
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,

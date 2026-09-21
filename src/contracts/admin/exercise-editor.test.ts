@@ -85,20 +85,68 @@ describe("exercise editor backend contracts", () => {
     ).toBe(false);
   });
 
-  it("keeps the two unsupported detail types readable for a safe UI state", () => {
-    for (const type of ["image_hotspot", "diagram_label"]) {
-      const parsed = exerciseDetailResponseSchema.parse({
+  it("validates image_hotspot detail content and answer key", () => {
+    const parsed = exerciseDetailResponseSchema.parse({
+      ...validExerciseDetailResponse,
+      data: {
+        ...validExerciseDetailResponse.data,
+        type: "image_hotspot",
+        content: {
+          instruction: "Başkenti seç.",
+          image: "https://example.test/map.png",
+          hotspots: [
+            { id: "a", text: "Ankara" },
+            { id: "b", text: "İstanbul" },
+          ],
+        },
+        answer_key: { hotspot_id: "a" },
+      },
+    });
+    expect(parsed.data.type).toBe("image_hotspot");
+
+    expect(
+      exerciseDetailResponseSchema.safeParse({
         ...validExerciseDetailResponse,
         data: {
           ...validExerciseDetailResponse.data,
-          type,
-          // Shapes this editor knows nothing about must stay readable.
+          type: "image_hotspot",
           content: { segments: [{ kind: "text", value: "x" }] },
           answer_key: { blanks: ["x"] },
         },
-      });
-      expect(parsed.data.type).toBe(type);
-    }
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates diagram_label detail content and answer key", () => {
+    const parsed = exerciseDetailResponseSchema.parse({
+      ...validExerciseDetailResponse,
+      data: {
+        ...validExerciseDetailResponse.data,
+        type: "diagram_label",
+        content: {
+          instruction: "Diyagramı etiketle.",
+          image: "https://example.test/diagram.png",
+          slots: [
+            { id: "a", text: "Üst nokta" },
+            { id: "b", text: "Alt nokta" },
+          ],
+        },
+        answer_key: { labels: { a: "Zirve", b: "Taban" } },
+      },
+    });
+    expect(parsed.data.type).toBe("diagram_label");
+
+    expect(
+      exerciseDetailResponseSchema.safeParse({
+        ...validExerciseDetailResponse,
+        data: {
+          ...validExerciseDetailResponse.data,
+          type: "diagram_label",
+          content: { segments: [{ kind: "text", value: "x" }] },
+          answer_key: { blanks: ["x"] },
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it("allowlists create and update fields", () => {

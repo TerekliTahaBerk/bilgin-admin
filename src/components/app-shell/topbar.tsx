@@ -6,6 +6,8 @@ import type { SafeAdmin } from "@/contracts/admin/session";
 import { BrandMark } from "@/components/app-shell/sidebar";
 import { CommandPalette } from "@/components/app-shell/command-palette";
 import { LogoutButton } from "@/components/app-shell/logout-button";
+import { ShortcutsHelp } from "@/components/app-shell/shortcuts-help";
+import { RecentExercisesMenu } from "@/features/content/recent-exercises-menu";
 
 type TopbarProps = Readonly<{
   admin: SafeAdmin;
@@ -48,6 +50,8 @@ export function Topbar({
       </div>
 
       <CommandPalette admin={admin} />
+      <RecentExercisesMenu />
+      <ShortcutsHelp />
 
       <div className="ml-auto flex items-center gap-4">
         <AccountSummary admin={admin} />

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   Course,
@@ -40,6 +40,7 @@ import {
   prioritizeNeedsReview,
   topicOptions,
 } from "@/features/content/exercise-list";
+import { archiveSequentially } from "@/features/content/bulk-archive";
 import { StatusBadge } from "@/features/content/status-badges";
 import { UnitReadiness } from "@/features/content/unit-readiness";
 import type { ApiError } from "@/lib/api/error";
@@ -78,20 +79,35 @@ function ExerciseRow({
   courseId,
   exercise,
   isArchiving,
+  isSelectable,
+  isSelected,
   onArchive,
+  onToggleSelected,
   unitId,
 }: {
   canEdit: boolean;
   courseId: number;
   exercise: ExerciseListItem;
   isArchiving: boolean;
+  isSelectable: boolean;
+  isSelected: boolean;
   onArchive: () => void;
+  onToggleSelected: () => void;
   unitId: number;
 }) {
   return (
     // Read-only: the exercise detail route arrives with the M2 editor.
     <li className="flex flex-col gap-2 px-4 py-3 sm:px-5">
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-4">
+        {isSelectable ? (
+          <input
+            aria-label={`${exercise.preview} sorusunu seç`}
+            checked={isSelected}
+            className="mt-1 shrink-0"
+            onChange={onToggleSelected}
+            type="checkbox"
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{exercise.preview}</p>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
@@ -168,6 +184,8 @@ const CREATE_ACTIONS: { type: SupportedEditorType; label: string }[] = [
   { type: "matching", label: "Eşleştirme" },
   { type: "ordering", label: "Sıralama" },
   { type: "word_order", label: "Kelime sıralama" },
+  { type: "image_hotspot", label: "Görsel üzerinde bölge" },
+  { type: "diagram_label", label: "Diyagram etiketleme" },
 ];
 
 function ListSkeleton() {
@@ -261,24 +279,46 @@ export function ExercisesBrowser({
 }: ExercisesBrowserProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const archiveMutation = useMutation({
-    mutationFn: archiveExercise,
-    retry: 0,
-    onSuccess: async (_data, exerciseId) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: unitExercisesQueryPrefix(unitId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: courseUnitsQueryKey(courseId),
-        }),
-        queryClient.invalidateQueries({ queryKey: nodePreviewQueryPrefix }),
+  const invalidateAfterArchive = async (exerciseIds: readonly number[]) => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: unitExercisesQueryPrefix(unitId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: courseUnitsQueryKey(courseId),
+      }),
+      queryClient.invalidateQueries({ queryKey: nodePreviewQueryPrefix }),
+      ...exerciseIds.map((exerciseId) =>
         queryClient.invalidateQueries({
           queryKey: exerciseDetailQueryKey(exerciseId),
         }),
-      ]);
-    },
+      ),
+    ]);
+  };
+  const archiveMutation = useMutation({
+    mutationFn: archiveExercise,
+    retry: 0,
+    onSuccess: (_data, exerciseId) => invalidateAfterArchive([exerciseId]),
   });
+
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(
+    new Set(),
+  );
+  const [bulkProgress, setBulkProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
+  const [bulkFailedCount, setBulkFailedCount] = useState<number | null>(null);
+  const isBulkArchiving = bulkProgress !== null;
+
+  function toggleSelected(id: number) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // All three queries start together; the exercise request never waits on
   // course or unit metadata.
@@ -343,6 +383,51 @@ export function ExercisesBrowser({
     filters.status !== undefined ||
     filters.topicId !== undefined ||
     filters.difficulty !== undefined;
+
+  const selectableIds = useMemo(
+    () =>
+      visible
+        .filter((exercise) => exercise.status !== "archived")
+        .map((exercise) => exercise.id),
+    [visible],
+  );
+  // A selection can only ever include ids the current filters still show —
+  // this both keeps the count in the toolbar honest and stops a stale id
+  // (e.g. one just archived, or hidden by a new filter) from being sent.
+  const activeSelectedIds = useMemo(
+    () => selectableIds.filter((id) => selectedIds.has(id)),
+    [selectableIds, selectedIds],
+  );
+
+  async function handleBulkArchive() {
+    if (activeSelectedIds.length === 0 || isBulkArchiving) return;
+    if (
+      !window.confirm(
+        `${activeSelectedIds.length} soruyu arşivlemek istiyor musunuz? Yeni oturumlar bu soruları kullanmaz; geçmiş kayıtları korunur.`,
+      )
+    ) {
+      return;
+    }
+
+    setBulkFailedCount(null);
+    setBulkProgress({ completed: 0, total: activeSelectedIds.length });
+
+    const result = await archiveSequentially(
+      activeSelectedIds,
+      archiveExercise,
+      (completed, total) => setBulkProgress({ completed, total }),
+    );
+
+    await invalidateAfterArchive(result.succeededIds);
+
+    setBulkProgress(null);
+    setBulkFailedCount(result.failedIds.length);
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const id of result.succeededIds) next.delete(id);
+      return next;
+    });
+  }
 
   if (isSessionExpired) {
     return (
@@ -481,6 +566,52 @@ export function ExercisesBrowser({
               </div>
             </dl>
 
+            {canEdit && selectableIds.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-muted px-4 py-2.5">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    aria-label="Görünen tüm soruları seç"
+                    checked={
+                      activeSelectedIds.length === selectableIds.length
+                    }
+                    disabled={isBulkArchiving}
+                    onChange={(event) => {
+                      setSelectedIds(
+                        event.target.checked ? new Set(selectableIds) : new Set(),
+                      );
+                    }}
+                    type="checkbox"
+                  />
+                  Tümünü seç
+                </label>
+                <span className="text-sm text-muted">
+                  {activeSelectedIds.length} soru seçili
+                </span>
+                <button
+                  className="ml-auto rounded-md border border-danger/40 px-3 py-1.5 text-sm font-semibold text-danger transition-colors hover:bg-danger/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={activeSelectedIds.length === 0 || isBulkArchiving}
+                  onClick={() => {
+                    void handleBulkArchive();
+                  }}
+                  type="button"
+                >
+                  {isBulkArchiving
+                    ? `Arşivleniyor… (${bulkProgress?.completed ?? 0}/${bulkProgress?.total ?? 0})`
+                    : `Seçilenleri arşivle (${activeSelectedIds.length})`}
+                </button>
+              </div>
+            ) : null}
+
+            {bulkFailedCount !== null && bulkFailedCount > 0 ? (
+              <p
+                className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger"
+                role="alert"
+              >
+                {bulkFailedCount} soru arşivlenemedi. Kalan soruları tekrar
+                seçip deneyebilirsiniz.
+              </p>
+            ) : null}
+
             {archiveMutation.isError ? (
               /*
                | A failed archive used to be silent: the button simply stopped
@@ -511,6 +642,8 @@ export function ExercisesBrowser({
                     archiveMutation.isPending &&
                     archiveMutation.variables === exercise.id
                   }
+                  isSelectable={canEdit && exercise.status !== "archived"}
+                  isSelected={selectedIds.has(exercise.id)}
                   key={exercise.id}
                   onArchive={() => {
                     if (
@@ -520,6 +653,7 @@ export function ExercisesBrowser({
                     )
                       archiveMutation.mutate(exercise.id);
                   }}
+                  onToggleSelected={() => toggleSelected(exercise.id)}
                   unitId={unitId}
                 />
               ))}

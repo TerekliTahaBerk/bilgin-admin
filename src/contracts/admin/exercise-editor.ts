@@ -206,6 +206,37 @@ export const wordOrderAnswerKeySchema = z.object({
   order: z.array(structuredIdSchema),
 });
 
+/**
+ * ImageHotspotValidator: an instruction, a reference image and a list of
+ * named regions the student chooses between. The backend stores `image` as a
+ * plain string key — it never validates that it is a URL — so the editor may
+ * point it at any externally hosted image without any upload endpoint.
+ */
+export const imageHotspotContentSchema = z.object({
+  instruction: z.string(),
+  image: z.string(),
+  hotspots: z.array(structuredItemSchema).min(1),
+});
+
+export const imageHotspotAnswerKeySchema = z.object({
+  hotspot_id: structuredIdSchema,
+});
+
+/**
+ * DiagramLabelValidator: an instruction, a reference image, a list of named
+ * slots and a correct label text per slot. Like image_hotspot, `image` is an
+ * opaque string the backend never fetches or validates.
+ */
+export const diagramLabelContentSchema = z.object({
+  instruction: z.string(),
+  image: z.string(),
+  slots: z.array(structuredItemSchema).min(1),
+});
+
+export const diagramLabelAnswerKeySchema = z.object({
+  labels: z.record(z.string(), z.string()),
+});
+
 /** The exercise types this editor is allowed to create and update. */
 export const supportedEditorTypeSchema = z.enum([
   "multiple_choice",
@@ -216,6 +247,8 @@ export const supportedEditorTypeSchema = z.enum([
   "matching",
   "ordering",
   "word_order",
+  "image_hotspot",
+  "diagram_label",
 ]);
 
 export type SupportedEditorType = z.infer<typeof supportedEditorTypeSchema>;
@@ -280,6 +313,16 @@ const detailShapeByType = {
     content: wordOrderContentSchema,
     answerKey: wordOrderAnswerKeySchema,
     label: "Kelime sıralama",
+  },
+  image_hotspot: {
+    content: imageHotspotContentSchema,
+    answerKey: imageHotspotAnswerKeySchema,
+    label: "Görsel üzerinde bölge",
+  },
+  diagram_label: {
+    content: diagramLabelContentSchema,
+    answerKey: diagramLabelAnswerKeySchema,
+    label: "Diyagram etiketleme",
   },
 } as const;
 
@@ -619,6 +662,78 @@ export const wordOrderEditableSchema = z
     );
   });
 
+/** Shared by image_hotspot and diagram_label: a required, non-empty image URL. */
+const editableImageUrlSchema = z
+  .string()
+  .trim()
+  .min(1, "Görsel adresi (URL) gerekli.");
+
+export const imageHotspotEditableSchema = z
+  .object({
+    type: z.literal("image_hotspot"),
+    ...commonEditableFields,
+    content: z.object({
+      instruction: z.string().trim().min(1, "Yönerge boş olamaz."),
+      image: editableImageUrlSchema,
+      hotspots: z
+        .array(editableStructuredItemSchema)
+        .min(2, "En az iki bölge tanımlanmalıdır."),
+    }),
+    answer_key: z.object({
+      hotspot_id: z.string().trim().min(1, "Doğru bölge seçilmelidir."),
+    }),
+  })
+  .superRefine((value, context) => {
+    const ids = reportDuplicateIds(
+      value.content.hotspots,
+      context,
+      ["content", "hotspots"],
+      "Bölge kimlikleri benzersiz olmalıdır.",
+    );
+
+    if (!ids.includes(value.answer_key.hotspot_id)) {
+      context.addIssue({
+        code: "custom",
+        path: ["answer_key", "hotspot_id"],
+        message: "Doğru bölge, tanımlı bölgeler arasından seçilmelidir.",
+      });
+    }
+  });
+
+export const diagramLabelEditableSchema = z
+  .object({
+    type: z.literal("diagram_label"),
+    ...commonEditableFields,
+    content: z.object({
+      instruction: z.string().trim().min(1, "Yönerge boş olamaz."),
+      image: editableImageUrlSchema,
+      slots: z
+        .array(editableStructuredItemSchema)
+        .min(2, "En az iki etiket yeri tanımlanmalıdır."),
+    }),
+    answer_key: z.object({
+      labels: z.record(z.string(), z.string().trim().min(1, "Etiket boş olamaz.")),
+    }),
+  })
+  .superRefine((value, context) => {
+    const ids = reportDuplicateIds(
+      value.content.slots,
+      context,
+      ["content", "slots"],
+      "Etiket yeri kimlikleri benzersiz olmalıdır.",
+    );
+
+    for (const id of ids) {
+      if (!Object.hasOwn(value.answer_key.labels, id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["answer_key", "labels", id],
+          message: `'${id}' için doğru etiket tanımlanmamış.`,
+        });
+      }
+    }
+  });
+
 export const editableExerciseSchema = z.discriminatedUnion("type", [
   multipleChoiceEditableSchema,
   trueFalseEditableSchema,
@@ -628,6 +743,8 @@ export const editableExerciseSchema = z.discriminatedUnion("type", [
   matchingEditableSchema,
   orderingEditableSchema,
   wordOrderEditableSchema,
+  imageHotspotEditableSchema,
+  diagramLabelEditableSchema,
 ]);
 
 export const createExerciseRequestSchema = z.discriminatedUnion("type", [
@@ -639,6 +756,8 @@ export const createExerciseRequestSchema = z.discriminatedUnion("type", [
   matchingEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   orderingEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
   wordOrderEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  imageHotspotEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
+  diagramLabelEditableSchema.extend({ owner_unit_id: positiveIdSchema }),
 ]);
 
 export const updateExerciseRequestSchema = editableExerciseSchema;
@@ -670,6 +789,8 @@ export type FlashcardContent = z.infer<typeof flashcardContentSchema>;
 export type MatchingContent = z.infer<typeof matchingContentSchema>;
 export type OrderingContent = z.infer<typeof orderingContentSchema>;
 export type WordOrderContent = z.infer<typeof wordOrderContentSchema>;
+export type ImageHotspotContent = z.infer<typeof imageHotspotContentSchema>;
+export type DiagramLabelContent = z.infer<typeof diagramLabelContentSchema>;
 export type EditableExercise = z.infer<typeof editableExerciseSchema>;
 export type ExerciseDetail = z.infer<typeof exerciseDetailDataSchema>;
 export type ExerciseDetailResponse = z.infer<

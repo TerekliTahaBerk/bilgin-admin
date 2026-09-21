@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/features/auth/login-form";
@@ -10,12 +11,23 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-primary-soft px-4 py-12">
       <section
         aria-labelledby="login-title"
-        className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 sm:p-8"
+        className="w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-sm sm:p-8"
       >
-        <h1 className="text-xl font-semibold tracking-tight" id="login-title">
+        <Image
+          alt=""
+          className="rounded-lg"
+          height={48}
+          priority
+          src="/brand/mascot.png"
+          width={48}
+        />
+        <h1
+          className="mt-4 text-xl font-semibold tracking-tight"
+          id="login-title"
+        >
           Bilgin
         </h1>
         <p className="text-xs font-medium tracking-[0.14em] text-muted uppercase">

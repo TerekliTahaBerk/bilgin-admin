@@ -265,6 +265,47 @@ describe("remaining workflow components", () => {
     );
   });
 
+  it("converts a pasted table into multiple-choice exercises and merges them into the JSON package", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<ContentImport />);
+    const packageJson = JSON.stringify({
+      course: "tyt_tarih",
+      subject: "tarih",
+      unit: { title: "Yeni Ünite", template: "standard" },
+      topics: [{ code: "tarih" }],
+      exercises: [{ type: "multiple_choice" }],
+    });
+    await user.click(screen.getByLabelText(/JSON yapıştırın/));
+    await user.paste(packageJson);
+    expect(screen.getByText("Yeni Ünite")).toBeDefined();
+
+    const tableTextarea = screen.getByLabelText("Tablo yapıştırma alanı");
+    await user.click(tableTextarea);
+    await user.paste(
+      "topic,stem,option_a,option_b,option_c,option_d,correct\nTarih,İlk sultan kimdir?,A,B,C,D,a",
+    );
+    expect(await screen.findByText("1 soru dönüştürüldü.")).toBeDefined();
+
+    await user.click(
+      screen.getByRole("button", { name: "Soldaki pakete ekle" }),
+    );
+    expect(
+      await screen.findByText(/soru pakete eklendi/),
+    ).toBeDefined();
+  });
+
+  it("shows row errors for an invalid pasted table without producing exercises", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<ContentImport />);
+    const tableTextarea = screen.getByLabelText("Tablo yapıştırma alanı");
+    await user.click(tableTextarea);
+    await user.paste(
+      "topic,stem,option_a,option_b,option_c,option_d,correct\n,Soru?,A,B,C,D,z",
+    );
+    expect(await screen.findByText(/Satır 2/)).toBeDefined();
+    expect(screen.queryByText(/soru dönüştürüldü/)).toBeNull();
+  });
+
   it("filters sections by exam id and saves the complete curriculum list", async () => {
     const user = userEvent.setup();
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -363,6 +404,122 @@ describe("remaining workflow components", () => {
         "01a0ab9b-0000-4000-8000-00000000beef",
         { is_active: false },
       ]),
+    );
+  });
+
+  it("warns before deactivating the only other admin who can manage accounts", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    getAdminAccounts.mockReset().mockResolvedValue({
+      roles: [{ value: "super_admin", label: "Süper Yönetici", abilities }],
+      admins: [
+        {
+          id: "actor",
+          name: "Ben",
+          email: "me@bilgin.test",
+          role: "super_admin",
+          role_label: "Süper Yönetici",
+          is_active: true,
+          last_login_at: null,
+        },
+        {
+          id: "other",
+          name: "İkinci",
+          email: "other@bilgin.test",
+          role: "super_admin",
+          role_label: "Süper Yönetici",
+          is_active: true,
+          last_login_at: null,
+        },
+      ],
+    });
+
+    renderWithQuery(
+      <AdminManager
+        currentAdmin={{
+          id: "actor",
+          name: "Ben",
+          email: "me@bilgin.test",
+          role: "super_admin",
+          roleLabel: "Süper Yönetici",
+          abilities,
+        }}
+      />,
+    );
+
+    const otherCard = (await screen.findByText("other@bilgin.test")).closest(
+      "article",
+    )!;
+    await user.click(
+      within(otherCard).getByRole("button", { name: "Pasif yap" }),
+    );
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/tek başınıza bırakacak/),
+    );
+    await waitFor(() =>
+      expect(updateAdminAccount.mock.calls[0]?.[0]).toBe("other"),
+    );
+  });
+
+  it("does not warn when deactivating a manager while another manager remains", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    getAdminAccounts.mockReset().mockResolvedValue({
+      roles: [{ value: "super_admin", label: "Süper Yönetici", abilities }],
+      admins: [
+        {
+          id: "actor",
+          name: "Ben",
+          email: "me@bilgin.test",
+          role: "super_admin",
+          role_label: "Süper Yönetici",
+          is_active: true,
+          last_login_at: null,
+        },
+        {
+          id: "other",
+          name: "İkinci",
+          email: "other@bilgin.test",
+          role: "super_admin",
+          role_label: "Süper Yönetici",
+          is_active: true,
+          last_login_at: null,
+        },
+        {
+          id: "third",
+          name: "Üçüncü",
+          email: "third@bilgin.test",
+          role: "super_admin",
+          role_label: "Süper Yönetici",
+          is_active: true,
+          last_login_at: null,
+        },
+      ],
+    });
+
+    renderWithQuery(
+      <AdminManager
+        currentAdmin={{
+          id: "actor",
+          name: "Ben",
+          email: "me@bilgin.test",
+          role: "super_admin",
+          roleLabel: "Süper Yönetici",
+          abilities,
+        }}
+      />,
+    );
+
+    const otherCard = (await screen.findByText("other@bilgin.test")).closest(
+      "article",
+    )!;
+    await user.click(
+      within(otherCard).getByRole("button", { name: "Pasif yap" }),
+    );
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      "Bu yönetici hesabını pasif yapmak istiyor musunuz?",
     );
   });
 });

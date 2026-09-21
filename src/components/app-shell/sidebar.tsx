@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -34,13 +35,23 @@ const navigationIcons: Readonly<Record<string, LucideIcon>> = {
 export function BrandMark() {
   return (
     <Link
-      className="flex flex-col rounded-md px-1 leading-tight"
+      className="flex items-center gap-2.5 rounded-md px-1 leading-tight"
       href="/"
       aria-label="Bilgin Admin ana sayfa"
     >
-      <span className="text-base font-semibold tracking-tight">Bilgin</span>
-      <span className="text-xs font-medium tracking-[0.14em] text-muted uppercase">
-        Admin
+      <Image
+        alt=""
+        className="rounded-md"
+        height={32}
+        priority
+        src="/brand/mascot.png"
+        width={32}
+      />
+      <span className="flex flex-col">
+        <span className="text-base font-semibold tracking-tight">Bilgin</span>
+        <span className="text-xs font-medium tracking-[0.14em] text-muted uppercase">
+          Admin
+        </span>
       </span>
     </Link>
   );

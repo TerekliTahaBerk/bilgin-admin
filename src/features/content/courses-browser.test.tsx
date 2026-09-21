@@ -168,7 +168,14 @@ describe("CoursesBrowser success", () => {
 
     await screen.findByText("TYT Türkçe");
 
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    // The CSV export button is a read-only, client-side action — not a write
+    // action and not nested inside a row link — so it is deliberately kept.
+    const buttons = screen.queryAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toMatch(/CSV/);
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.querySelector("button")).toBeNull();
+    }
     for (const absent of [/Yayınla/, /Ünite Oluştur/, /Düzenle/, /Yeni/]) {
       expect(document.body.textContent).not.toMatch(absent);
     }

@@ -15,6 +15,7 @@ import {
   summarizeAdminRoster,
   unitExerciseCounts,
 } from "@/features/analytics/analytics-aggregations";
+import { AttentionPanel } from "@/features/analytics/attention-panel";
 import { BarList } from "@/features/analytics/bar-list";
 import {
   coursesQueryOptions,
@@ -294,6 +295,7 @@ export function AnalyticsDashboard({ admin }: { admin: SafeAdmin }) {
 
   return (
     <div className="space-y-8">
+      <AttentionPanel />
       <ContentOverview courses={coursesQuery.data} />
       <CourseDrilldown courses={coursesQuery.data} />
       {can(admin, "edit_curriculum") ? <AdminRoster /> : null}

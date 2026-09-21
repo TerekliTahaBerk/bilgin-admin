@@ -570,6 +570,8 @@ describe("ExercisesBrowser editor actions", () => {
       ["Eşleştirme", `${base}?type=matching`],
       ["Sıralama", `${base}?type=ordering`],
       ["Kelime sıralama", `${base}?type=word_order`],
+      ["Görsel üzerinde bölge", `${base}?type=image_hotspot`],
+      ["Diyagram etiketleme", `${base}?type=diagram_label`],
     ];
 
     const group = within(
@@ -581,10 +583,6 @@ describe("ExercisesBrowser editor actions", () => {
       ).toBe(href);
     }
     expect(group.getAllByRole("link")).toHaveLength(expected.length);
-
-    // The two media types have no create action.
-    expect(screen.queryByRole("link", { name: /görsel/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /diyagram/i })).toBeNull();
   });
 
   it("links Düzenle for the editable types only", async () => {
@@ -592,13 +590,14 @@ describe("ExercisesBrowser editor actions", () => {
     await screen.findByText("(önizleme yok)");
 
     // Fixture rows: multiple_choice(1), true_false(2), fill_blank(3),
-    // matching(4), image_hotspot(5). Only image_hotspot is not editable.
+    // matching(4), image_hotspot(5) — all five are editable types.
     const editLinks = screen.getAllByRole("link", { name: "Düzenle" });
     expect(editLinks.map((link) => link.getAttribute("href")).sort()).toEqual([
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/1`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/2`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/3`,
       `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/4`,
+      `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/5`,
     ]);
   });
 
@@ -625,15 +624,15 @@ describe("ExercisesBrowser editor actions", () => {
     renderBrowser({}, true);
     await screen.findByText("multiple_choice önizleme");
 
-    // The eight text editor types are editable; the two media types stay
-    // read-only until there is media infrastructure to edit them with.
+    // All ten types are editable, including the two media types, since their
+    // "image" field is an opaque external URL the backend never validates.
     expect(
       screen
         .getAllByRole("link", { name: "Düzenle" })
         .map((link) => link.getAttribute("href"))
         .sort(),
     ).toEqual(
-      [1, 2, 3, 4, 5, 6, 7, 8]
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         .map((id) => `/courses/${COURSE_ID}/units/${UNIT_ID}/exercises/${id}`)
         .sort(),
     );
@@ -772,6 +771,90 @@ describe("ExercisesBrowser archiving", () => {
     expect(message).toMatch(/geçmiş kayıtları korunur/);
 
     // Declining must not call the backend.
+    expect(archiveExercise).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExercisesBrowser bulk archiving", () => {
+  it("shows no selection checkboxes or bulk toolbar without edit_content", async () => {
+    renderBrowser();
+
+    await screen.findByText("(önizleme yok)");
+
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByText(/Seçilenleri arşivle/)).toBeNull();
+  });
+
+  it("offers a checkbox for every non-archived exercise, not the archived one", async () => {
+    renderBrowser({}, true);
+
+    await screen.findByText("(önizleme yok)");
+
+    // 5 exercises in the fixture, 1 archived (id 4) — 4 selectable rows plus
+    // the "select all" checkbox in the toolbar.
+    expect(screen.getAllByRole("checkbox")).toHaveLength(5);
+  });
+
+  it("archives every selected exercise in sequence and reports the count", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    archiveExercise.mockResolvedValue({ id: 1, status: "archived" });
+
+    renderBrowser({}, true);
+
+    await screen.findByText("(önizleme yok)");
+    await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
+
+    expect(screen.getByText("4 soru seçili")).toBeDefined();
+
+    await user.click(
+      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+    );
+
+    await waitFor(() => {
+      expect(archiveExercise).toHaveBeenCalledTimes(4);
+    });
+    // Every selectable id (1, 2, 3, 5 — not the already-archived 4) was sent.
+    expect(archiveExercise.mock.calls.map((call) => call[0]).sort()).toEqual([
+      1, 2, 3, 5,
+    ]);
+  });
+
+  it("keeps going past a failed archive and reports how many failed", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    archiveExercise
+      .mockResolvedValueOnce({ id: 1, status: "archived" })
+      .mockRejectedValueOnce(new Error("Sunucuya ulaşılamadı."))
+      .mockResolvedValueOnce({ id: 3, status: "archived" })
+      .mockResolvedValueOnce({ id: 5, status: "archived" });
+
+    renderBrowser({}, true);
+
+    await screen.findByText("(önizleme yok)");
+    await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
+    await user.click(
+      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+    );
+
+    expect(
+      await screen.findByText(/1 soru arşivlenemedi/),
+    ).toBeDefined();
+    expect(archiveExercise).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not archive anything when the confirmation is declined", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    renderBrowser({}, true);
+
+    await screen.findByText("(önizleme yok)");
+    await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
+    await user.click(
+      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+    );
+
     expect(archiveExercise).not.toHaveBeenCalled();
   });
 });
