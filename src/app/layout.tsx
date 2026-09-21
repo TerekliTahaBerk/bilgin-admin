@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import "@/app/globals.css";
+import { ClientErrorObserver } from "@/components/observability/client-error-observer";
 
 export const metadata: Metadata = {
   title: "Bilgin Admin",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body>{children}</body>
+      <body>
+        <ClientErrorObserver />
+        {children}
+      </body>
     </html>
   );
 }

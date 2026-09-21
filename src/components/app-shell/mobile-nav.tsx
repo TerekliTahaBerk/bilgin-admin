@@ -71,7 +71,7 @@ export function MobileNav({ admin, isOpen, onClose }: MobileNavProps) {
         <div className="shrink-0 border-t border-border p-4">
           <p className="truncate text-sm font-medium">{admin.name}</p>
           <p className="truncate text-xs text-muted">{admin.roleLabel}</p>
-          <LogoutButton className="mt-3" />
+          <LogoutButton className="mt-3" hint />
         </div>
       </div>
     </div>

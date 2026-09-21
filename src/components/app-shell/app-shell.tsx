@@ -38,30 +38,33 @@ export function AppShell({ initialAdmin, children }: AppShellProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <SessionHeartbeat onSessionSuccess={handleSessionSuccess} />
+    // The provider now wraps the whole shell, not just the page content: the
+    // command palette lives in the Topbar and needs the same QueryClient (and
+    // the same `coursesQueryKey` cache) the page content uses.
+    <QueryProvider>
+      <div className="min-h-screen bg-background">
+        <SessionHeartbeat onSessionSuccess={handleSessionSuccess} />
 
-      <Sidebar admin={admin} />
+        <Sidebar admin={admin} />
 
-      <MobileNav
-        admin={admin}
-        isOpen={isMobileNavOpen}
-        onClose={closeMobileNav}
-      />
-
-      <div className="flex min-h-screen flex-col md:pl-60 lg:pl-64">
-        <Topbar
+        <MobileNav
           admin={admin}
-          isMobileNavOpen={isMobileNavOpen}
-          onOpenMobileNav={() => setIsMobileNavOpen(true)}
+          isOpen={isMobileNavOpen}
+          onClose={closeMobileNav}
         />
 
-        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mx-auto w-full max-w-[1520px]">
-            <QueryProvider>{children}</QueryProvider>
-          </div>
-        </main>
+        <div className="flex min-h-screen flex-col md:pl-60 lg:pl-64">
+          <Topbar
+            admin={admin}
+            isMobileNavOpen={isMobileNavOpen}
+            onOpenMobileNav={() => setIsMobileNavOpen(true)}
+          />
+
+          <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+            <div className="mx-auto w-full max-w-[1520px]">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </QueryProvider>
   );
 }

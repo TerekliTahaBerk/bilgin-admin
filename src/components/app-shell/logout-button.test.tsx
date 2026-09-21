@@ -140,4 +140,18 @@ describe("LogoutButton", () => {
       expect(logoutButton().hasAttribute("disabled")).toBe(false);
     });
   });
+
+  it("shows no local-only disclaimer by default", () => {
+    render(<LogoutButton />);
+
+    expect(screen.queryByText(/yalnızca bu cihazdaki oturumu/)).toBeNull();
+  });
+
+  it("shows the local-only disclaimer when hint is requested", () => {
+    render(<LogoutButton hint />);
+
+    expect(
+      screen.getByText(/yalnızca bu cihazdaki oturumu kapatır/),
+    ).toBeDefined();
+  });
 });

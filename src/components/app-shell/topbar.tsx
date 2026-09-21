@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 
 import type { SafeAdmin } from "@/contracts/admin/session";
 import { BrandMark } from "@/components/app-shell/sidebar";
+import { CommandPalette } from "@/components/app-shell/command-palette";
 import { LogoutButton } from "@/components/app-shell/logout-button";
 
 type TopbarProps = Readonly<{
@@ -45,6 +46,8 @@ export function Topbar({
       <div className="md:hidden">
         <BrandMark />
       </div>
+
+      <CommandPalette admin={admin} />
 
       <div className="ml-auto flex items-center gap-4">
         <AccountSummary admin={admin} />
