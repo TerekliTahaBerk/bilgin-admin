@@ -144,11 +144,30 @@ beslenir; boşsa hiçbir proxy'ye güvenilmez. Panel mimarisi
 deployment topolojisine bağlıdır: yanlış yapılandırmada tüm panel trafiği tek IP
 gibi görünür ve rate limit ya herkesi birlikte kilitler ya da anlamsızlaşır.
 
-Frontend bilinçli olarak `X-Forwarded-For` / `X-Real-IP` **forward etmez** —
-güvenilmeyen bir başlığı körlemesine iletmek rate limit'i atlatılabilir hale
-getirirdi.
+**Frontend tarafı çözüldü.** Panel Vercel'de barındığı için `/api/session/login`
+artık `@vercel/functions`'ın `ipAddress()` yardımcısıyla — istemcinin
+gönderdiği bir başlığı değil, Vercel'in edge proxy'sinin kendi hesapladığı
+adresi (`x-real-ip`) — gerçek istemci IP'sini okuyor
+(`src/lib/security/client-ip.ts`) ve yalnızca login çağrısında Laravel'e
+`X-Forwarded-For` olarak iletiyor (`src/lib/backend/client.ts`). Diğer hiçbir
+uca hâlâ hiçbir proxy başlığı forward edilmiyor; bu, gelen bir başlığı
+körlemesine iletmekten farklıdır — Vercel'in kendi hesapladığı değeri, panelin
+kendisi tek bir güvenilir başlığa dönüştürüyor.
 
-> **Gate:** deployment'ta trusted proxy / client IP restorasyonu doğrulanmalı.
+Bu, gate'in yalnızca yarısı: Laravel bu değeri **yalnızca** `TRUSTED_PROXIES`
+bu paneli (Next.js sunucusunu) güvenilir proxy olarak tanımlıyorsa dikkate
+alır. Vercel serverless fonksiyonlarının varsayılan olarak sabit bir çıkış
+IP'si yoktur, bu yüzden `TRUSTED_PROXIES`'i tek bir IP/CIDR'a kilitlemek genelde
+mümkün değildir — pratik seçenekler: (a) Vercel'in statik giden IP eklentisini
+kullanıp o IP/CIDR'ı `TRUSTED_PROXIES`'e yazmak, ya da (b) Laravel API'sinin
+internetten doğrudan erişilebilir olmadığından (yalnızca bu panelden
+çağrıldığından) emin olup `TRUSTED_PROXIES=*` kullanmak — bu güvenli olması için
+Laravel'in başka hiçbir yoldan halka açık olmaması gerekir.
+
+> **Gate:** backend deployment'ında `TRUSTED_PROXIES` yukarıdaki seçeneklerden
+> biriyle ayarlanmalı. Bu, bu repodan yapılamaz; backend'in barındığı
+> platform ve ağ topolojisi bilinmeden hangi seçeneğin doğru olduğu
+> söylenemez.
 
 ### 5. Stateless cookie replay
 

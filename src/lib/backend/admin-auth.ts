@@ -25,12 +25,17 @@ function requireBackendToken(backendToken: string): string {
 export const adminBackend = Object.freeze({
   login(
     input: AdminLoginRequest,
-    options: BackendRequestOptions = {},
+    options: BackendRequestOptions & { clientIp?: string | null } = {},
   ): Promise<BackendResult<AdminLoginResponse>> {
     const request = adminLoginRequestSchema.parse(input);
 
     return requestAdminBackend(
-      { operation: "login", body: request, signal: options.signal },
+      {
+        operation: "login",
+        body: request,
+        clientIp: options.clientIp,
+        signal: options.signal,
+      },
       adminLoginResponseSchema,
     );
   },

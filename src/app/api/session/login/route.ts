@@ -3,6 +3,7 @@ import type { ZodIssue } from "zod";
 import { adminLoginRequestSchema } from "@/contracts/admin/auth";
 import type { ApiError } from "@/lib/api/error";
 import { adminBackend } from "@/lib/backend/admin-auth";
+import { getVerifiedClientIp } from "@/lib/security/client-ip";
 import { verifyOrigin } from "@/lib/security/verify-origin";
 import { setSessionCookie } from "@/lib/session/cookie";
 import {
@@ -61,7 +62,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const backendResult = await adminBackend.login(parsedInput.data);
+  const backendResult = await adminBackend.login(parsedInput.data, {
+    clientIp: getVerifiedClientIp(request),
+  });
 
   if (!backendResult.ok) {
     return createSessionErrorResponse(backendResult.error);

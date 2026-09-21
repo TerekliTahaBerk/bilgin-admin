@@ -125,6 +125,36 @@ describe("admin backend request safety", () => {
     }
   });
 
+  it("does not forward a client IP when none is provided", async () => {
+    const fetchMock = stubFetch(jsonResponse(validEditorLoginResponse));
+
+    await adminBackend.login(LOGIN_INPUT);
+
+    const { headers } = requestFrom(fetchMock);
+
+    expect(headers.has("X-Forwarded-For")).toBe(false);
+  });
+
+  it("forwards a verified client IP for the throttle Laravel applies to login", async () => {
+    const fetchMock = stubFetch(jsonResponse(validEditorLoginResponse));
+
+    await adminBackend.login(LOGIN_INPUT, { clientIp: "203.0.113.42" });
+
+    const { headers } = requestFrom(fetchMock);
+
+    expect(headers.get("X-Forwarded-For")).toBe("203.0.113.42");
+  });
+
+  it("does not forward a null client IP as the literal string", async () => {
+    const fetchMock = stubFetch(jsonResponse(validEditorLoginResponse));
+
+    await adminBackend.login(LOGIN_INPUT, { clientIp: null });
+
+    const { headers } = requestFrom(fetchMock);
+
+    expect(headers.has("X-Forwarded-For")).toBe(false);
+  });
+
   it("rejects an empty explicit backend token before fetch", async () => {
     const fetchMock = stubFetch(jsonResponse(validAdminMeResponse));
 

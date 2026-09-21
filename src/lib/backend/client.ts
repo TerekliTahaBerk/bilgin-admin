@@ -174,6 +174,11 @@ type AdminBackendRequest =
   | Readonly<{
       operation: "login";
       body: AdminLoginRequest;
+      // The real client IP, already verified by Vercel's edge proxy (see
+      // `getVerifiedClientIp`) — never a header read straight from the
+      // incoming request. `null`/absent omits the forwarded-IP header
+      // entirely rather than sending a fabricated one.
+      clientIp?: string | null;
       signal?: AbortSignal;
     }>
   | Readonly<{
@@ -395,6 +400,17 @@ function createBackendRequest(request: AdminBackendRequest): {
   if (request.operation === "login") {
     headers.set("Content-Type", "application/json");
     init.body = JSON.stringify(request.body);
+
+    // Only for login: this is the one backend call the throttle in
+    // `bootstrap/app.php` cares about. The value has already been verified
+    // by `getVerifiedClientIp` (Vercel's own edge proxy, not a client-
+    // supplied header), so it is safe to forward — Laravel still only
+    // trusts it once `TRUSTED_PROXIES` on that deployment names this
+    // server as a trusted hop. See README.md, "Login throttle ve gerçek
+    // istemci IP'si".
+    if (request.clientIp) {
+      headers.set("X-Forwarded-For", request.clientIp);
+    }
   } else {
     headers.set("Authorization", `Bearer ${request.backendToken}`);
 

@@ -26,8 +26,14 @@ const backendMocks = vi.hoisted(() => ({
   me: vi.fn(),
 }));
 
+const getVerifiedClientIp = vi.fn();
+
 vi.mock("@/lib/backend/admin-auth", () => ({
   adminBackend: backendMocks,
+}));
+
+vi.mock("@/lib/security/client-ip", () => ({
+  getVerifiedClientIp: (...args: unknown[]) => getVerifiedClientIp(...args),
 }));
 
 const NOW = 1_800_000_000_000;
@@ -106,6 +112,8 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   backendMocks.login.mockReset();
   backendMocks.me.mockReset();
+  getVerifiedClientIp.mockReset();
+  getVerifiedClientIp.mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -126,7 +134,9 @@ describe("POST /api/session/login", () => {
     expect(response.status).toBe(200);
     expectNoStore(response);
     expect(backendMocks.login).toHaveBeenCalledTimes(1);
-    expect(backendMocks.login).toHaveBeenCalledWith(LOGIN_INPUT);
+    expect(backendMocks.login).toHaveBeenCalledWith(LOGIN_INPUT, {
+      clientIp: null,
+    });
     expect(body).toEqual({ data: { admin: safeAdmin } });
     expect(JSON.stringify(body)).not.toContain(
       validEditorLoginResponse.data.token,
@@ -147,6 +157,20 @@ describe("POST /api/session/login", () => {
       issuedAt: NOW,
       validatedAt: NOW,
       expiresAt: NOW + sessionMaxAgeSeconds * 1000,
+    });
+  });
+
+  it("forwards the verified client IP to the backend login call", async () => {
+    backendMocks.login.mockResolvedValue({
+      ok: true,
+      data: validEditorLoginResponse,
+    });
+    getVerifiedClientIp.mockReturnValue("203.0.113.42");
+
+    await loginRoute(loginRequest());
+
+    expect(backendMocks.login).toHaveBeenCalledWith(LOGIN_INPUT, {
+      clientIp: "203.0.113.42",
     });
   });
 
