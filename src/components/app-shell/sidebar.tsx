@@ -2,6 +2,7 @@
 
 import {
   Circle,
+  ClipboardCheck,
   FileJson,
   GraduationCap,
   Home,
@@ -27,6 +28,7 @@ import {
 const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   home: Home,
   content: Library,
+  quality: ClipboardCheck,
   import: FileJson,
   curriculum: GraduationCap,
   admins: ShieldCheck,

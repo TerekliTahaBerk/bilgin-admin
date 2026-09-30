@@ -29,6 +29,7 @@ const productionNavigation = [
   { id: "home", label: "Ana Sayfa", href: "/" },
   { id: "content", label: "İçerik", href: "/courses" },
   { id: "analytics", label: "Veri Paneli", href: "/analytics" },
+  { id: "quality", label: "Soru Kalitesi", href: "/quality" },
   {
     id: "import",
     label: "JSON İçe Aktar",
@@ -59,6 +60,7 @@ describe("adminNavigation", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       "edit_content",
       "edit_curriculum",
       "edit_curriculum",
@@ -74,7 +76,7 @@ describe("adminNavigation", () => {
     });
 
     expect(filterNavigation(adminNavigation, admin)).toEqual(
-      productionNavigation.slice(0, 3),
+      productionNavigation.slice(0, 4),
     );
   });
 
