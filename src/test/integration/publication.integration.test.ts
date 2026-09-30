@@ -314,6 +314,63 @@ describe("GET /api/admin/nodes/[nodeId]/preview-selection", () => {
     expect(body.data.required).toBe(6);
   });
 
+  it("forwards the backend's live-pool fields verbatim", async () => {
+    const seal = await issueSession();
+    const liveWarning =
+      "Öğrenciler şu an 2 soru alıyor; 6 gerekiyor. Farkı ünitenin yayınlanmamış soruları kapatıyor — yayınlamadan düzelmez.";
+
+    mswServer.use(
+      http.get(ANY_PREVIEW_URL, () =>
+        HttpResponse.json({
+          ...passingPreviewResponse,
+          data: {
+            ...passingPreviewResponse.data,
+            live_available: 2,
+            live_passes: false,
+            live_warning: liveWarning,
+          },
+        }),
+      ),
+    );
+
+    const body = await (await callPreview(seal)).json();
+
+    expect(body.data).toMatchObject({
+      passes: true,
+      live_available: 2,
+      live_passes: false,
+      live_warning: liveWarning,
+    });
+  });
+
+  it("is open to an admin without publish_content", async () => {
+    const seal = await issueSession(contentEditorFixture);
+    watchBackend(ANY_PREVIEW_URL, () =>
+      HttpResponse.json(passingPreviewResponse),
+    );
+
+    expect((await callPreview(seal)).status).toBe(200);
+  });
+
+  it("rejects a preview payload without the live-pool fields", async () => {
+    const seal = await issueSession();
+    // The shape this frontend accepted before the live-pool fields existed.
+    const legacy = Object.fromEntries(
+      Object.entries(passingPreviewResponse.data).filter(
+        ([key]) => !key.startsWith("live_"),
+      ),
+    );
+
+    watchBackend(ANY_PREVIEW_URL, () =>
+      HttpResponse.json({ ...passingPreviewResponse, data: legacy }),
+    );
+
+    const response = await callPreview(seal);
+
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect((await response.json()).error.kind).toBe("contract");
+  });
+
   it.each([
     ["zero", "0"],
     ["a word", "abc"],

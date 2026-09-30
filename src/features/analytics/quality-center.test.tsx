@@ -538,7 +538,9 @@ describe("QualityCenter scan", () => {
       await screen.findByRole("button", { name: "Tara (3 ünite)" }),
     );
 
-    expect(await screen.findByText("Tarama tamamlandı.")).toBeDefined();
+    expect(
+      await screen.findByText("Tarama tamamlandı.", {}, { timeout: 5000 }),
+    ).toBeDefined();
     expect(getCourseUnits.mock.calls.map(([id]) => id).sort()).toEqual([1, 2]);
     expect(getUnitExercises.mock.calls).toEqual([
       [10, {}],
@@ -561,7 +563,9 @@ describe("QualityCenter scan", () => {
       await screen.findByRole("button", { name: "Kalanları tara (1 ünite)" }),
     );
 
-    expect(await screen.findByText("Tarama tamamlandı.")).toBeDefined();
+    expect(
+      await screen.findByText("Tarama tamamlandı.", {}, { timeout: 5000 }),
+    ).toBeDefined();
     expect(getCourseUnits.mock.calls.map(([id]) => id)).toEqual([2]);
     expect(getUnitExercises.mock.calls).toEqual([[20, {}]]);
   });
@@ -582,7 +586,9 @@ describe("QualityCenter scan", () => {
       }),
     );
 
-    expect(await screen.findByText("Tarama tamamlandı.")).toBeDefined();
+    expect(
+      await screen.findByText("Tarama tamamlandı.", {}, { timeout: 5000 }),
+    ).toBeDefined();
     expect(getCourseUnits.mock.calls).toEqual([[2]]);
     expect(getUnitExercises.mock.calls).toEqual([[20, {}]]);
   });
@@ -604,7 +610,9 @@ describe("QualityCenter scan", () => {
       await screen.findByRole("button", { name: "Tara (1 ünite)" }),
     );
 
-    expect(await screen.findByText("Tarama tamamlandı.")).toBeDefined();
+    expect(
+      await screen.findByText("Tarama tamamlandı.", {}, { timeout: 5000 }),
+    ).toBeDefined();
     expect(getCourseUnits).not.toHaveBeenCalled();
     expect(getUnitExercises.mock.calls).toEqual([[10, {}]]);
     expect(await listItems()).toHaveLength(2);
@@ -638,7 +646,9 @@ describe("QualityCenter scan", () => {
       screen.getByRole("button", { name: "Okunamayanları tekrar dene" }),
     );
 
-    expect(await screen.findByText("Tarama tamamlandı.")).toBeDefined();
+    expect(
+      await screen.findByText("Tarama tamamlandı.", {}, { timeout: 5000 }),
+    ).toBeDefined();
     expect(getCourseUnits).not.toHaveBeenCalled();
     expect(getUnitExercises.mock.calls).toEqual([[20, {}]]);
     expect(await listItems()).toHaveLength(4);

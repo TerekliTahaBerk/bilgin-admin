@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { NodePreview } from "@/contracts/admin/publication";
 import {
+  nodeHasWarning,
   nodePreviewAnchorId,
   publishBlockingRows,
   readinessState,
   summarizeReadiness,
+  unitReadinessCategories,
+  unitReadinessCategory,
+  unitReadinessCategoryLabels,
 } from "@/features/content/readiness";
 import type { ApiError } from "@/lib/api/error";
 import {
@@ -40,6 +44,9 @@ describe("readinessState", () => {
       relaxed: false,
       passes: false,
       message: "selection_rule.mode geçersiz: null",
+      live_available: 0,
+      live_passes: false,
+      live_warning: null,
     };
 
     expect(readinessState(invalid)).toBe("fail");
@@ -127,5 +134,89 @@ describe("publishBlockingRows", () => {
 describe("nodePreviewAnchorId", () => {
   it("names the row a blocking link can reach", () => {
     expect(nodePreviewAnchorId(103)).toBe("node-preview-103");
+  });
+});
+
+describe("nodeHasWarning", () => {
+  it("flags a relaxed pass and a backend live warning, nothing else", () => {
+    expect(nodeHasWarning(passing)).toBe(false);
+    expect(nodeHasWarning(relaxed)).toBe(true);
+    expect(nodeHasWarning(failing)).toBe(false);
+    expect(
+      nodeHasWarning({
+        ...passing,
+        live_available: 2,
+        live_passes: false,
+        live_warning: "Öğrenciler şu an 2 soru alıyor; 6 gerekiyor.",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not invent a warning from live counts alone", () => {
+    // Only the backend decides when the live gap deserves a warning.
+    expect(
+      nodeHasWarning({ ...passing, live_available: 0, live_passes: false }),
+    ).toBe(false);
+  });
+});
+
+describe("summarizeReadiness warnings", () => {
+  it("counts nodes with a warning", () => {
+    const live = { ...passing, live_warning: "uyarı" };
+
+    expect(summarizeReadiness(3, [passing, relaxed, live]).warnings).toBe(2);
+  });
+});
+
+describe("unitReadinessCategory", () => {
+  const summary = (previews: NodePreview[], total = previews.length) =>
+    summarizeReadiness(total, previews);
+
+  it("puts a published unit in 'published' whatever its previews say", () => {
+    expect(unitReadinessCategory("published", summary([failing]))).toBe(
+      "published",
+    );
+    expect(unitReadinessCategory("published", null)).toBe("published");
+  });
+
+  it("is unknown while the node list is not known", () => {
+    expect(unitReadinessCategory("draft", null)).toBe("unknown");
+  });
+
+  it("is blocked as soon as one node failed, even with others unknown", () => {
+    expect(unitReadinessCategory("draft", summary([failing], 3))).toBe(
+      "blocked",
+    );
+  });
+
+  it("is unknown while any node has not answered", () => {
+    expect(unitReadinessCategory("review", summary([passing], 2))).toBe(
+      "unknown",
+    );
+  });
+
+  it("separates a relaxed pass from a clean one", () => {
+    expect(unitReadinessCategory("draft", summary([passing, relaxed]))).toBe(
+      "relaxed",
+    );
+    expect(unitReadinessCategory("draft", summary([passing]))).toBe("ready");
+  });
+
+  it("follows the backend gate for a unit with no nodes", () => {
+    expect(unitReadinessCategory("draft", summary([]))).toBe("ready");
+  });
+
+  it("labels every category", () => {
+    expect(
+      unitReadinessCategories.map(
+        (category) => unitReadinessCategoryLabels[category],
+      ),
+    ).toEqual([
+      "Yayına hazır",
+      "Gevşetilmiş kuralla hazır",
+      "Bloklanmış",
+      "Hazırlık durumu bilinmiyor",
+      "Zaten yayında",
+    ]);
   });
 });

@@ -1,5 +1,7 @@
 import type { Unit } from "@/contracts/admin/content";
-import { apiErrorKinds, type ApiError } from "@/lib/api/error";
+import { runWithConcurrency } from "@/lib/async/run-with-concurrency";
+import { toApiError, type ApiError } from "@/lib/api/error";
+import { shouldHaltBatch } from "@/lib/api/retry-policy";
 
 /**
  * How many list requests a scan keeps in flight at once. There is no bulk
@@ -54,61 +56,6 @@ export type ScanDependencies = Readonly<{
   concurrency?: number;
 }>;
 
-const unknownError: ApiError = {
-  kind: "unknown",
-  status: null,
-  message: "İstek tamamlanamadı.",
-};
-
-export function toApiError(error: unknown): ApiError {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    (apiErrorKinds as readonly unknown[]).includes(
-      (error as { kind?: unknown }).kind,
-    ) &&
-    typeof (error as { message?: unknown }).message === "string"
-  ) {
-    return error as ApiError;
-  }
-
-  return unknownError;
-}
-
-/**
- * An expired session or a rate limit applies to every remaining request, so
- * the scan stops instead of reproducing the same failure once per unit.
- */
-export function isHaltingError(error: ApiError): boolean {
-  return error.kind === "authentication" || error.kind === "rate_limit";
-}
-
-/**
- * Runs `worker` over `items` with at most `limit` in flight, in input order.
- * `shouldStop` is checked before each item starts; items already in flight
- * are allowed to finish.
- */
-export async function runWithConcurrency<Item>(
-  items: readonly Item[],
-  limit: number,
-  worker: (item: Item) => Promise<void>,
-  shouldStop: () => boolean,
-): Promise<void> {
-  let next = 0;
-
-  async function lane(): Promise<void> {
-    while (next < items.length && !shouldStop()) {
-      const item = items[next] as Item;
-      next += 1;
-      await worker(item);
-    }
-  }
-
-  const lanes = Math.max(1, Math.min(limit, items.length));
-
-  await Promise.all(Array.from({ length: lanes }, () => lane()));
-}
-
 /**
  * Reads course → unit → exercise lists. Units the backend already reports as
  * having no exercises are never requested. One failing course or unit does
@@ -154,7 +101,7 @@ export async function runQualityScan(
         } catch (raw) {
           const error = toApiError(raw);
 
-          if (isHaltingError(error)) haltError ??= error;
+          if (shouldHaltBatch(error)) haltError ??= error;
           else failures.push({ kind: "course", courseId, error });
         }
 
@@ -184,7 +131,7 @@ export async function runQualityScan(
         } catch (raw) {
           const error = toApiError(raw);
 
-          if (isHaltingError(error)) haltError ??= error;
+          if (shouldHaltBatch(error)) haltError ??= error;
           else failures.push({ kind: "unit", ...unit, error });
         }
 

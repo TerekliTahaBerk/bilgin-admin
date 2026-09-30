@@ -25,6 +25,9 @@ export const adminNavigation: readonly NavigationItem[] = [
   // Built only from the same content reads (course → unit → exercise lists);
   // the edit links inside it gate themselves on `edit_content`.
   { id: "quality", label: "Soru Kalitesi", href: "/quality" },
+  // Readiness reads are open to every admin; the publish buttons inside gate
+  // themselves on `publish_content`, exactly as on the unit page.
+  { id: "publishing", label: "Yayın Merkezi", href: "/publishing" },
   {
     id: "import",
     label: "JSON İçe Aktar",

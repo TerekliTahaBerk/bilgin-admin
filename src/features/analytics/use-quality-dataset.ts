@@ -14,12 +14,11 @@ import {
   type LoadedUnitExercises,
   type QualityRow,
 } from "@/features/analytics/quality-dataset";
-import { toApiError } from "@/features/analytics/quality-scan";
 import {
   courseUnitsQueryOptions,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
-import type { ApiError } from "@/lib/api/error";
+import { toApiError, type ApiError } from "@/lib/api/error";
 
 /** Only the unfiltered list is a complete picture of a unit. */
 const UNFILTERED = {} as const;

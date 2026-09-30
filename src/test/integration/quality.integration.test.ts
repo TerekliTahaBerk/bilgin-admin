@@ -15,7 +15,8 @@ import {
   summarizeQuality,
 } from "@/features/analytics/quality-dataset";
 import { applyQualityFilters } from "@/features/analytics/quality-filters";
-import { isHaltingError, toApiError } from "@/features/analytics/quality-scan";
+import { toApiError } from "@/lib/api/error";
+import { shouldHaltBatch } from "@/lib/api/retry-policy";
 import { contentReviewerFixture } from "@/test/fixtures/admin-roles";
 import { validCoursesResponse } from "@/test/fixtures/courses-api";
 import { validUnitExercisesResponse } from "@/test/fixtures/exercises-api";
@@ -168,6 +169,6 @@ describe("Quality Center data chain through the existing BFF", () => {
 
     expect(response.status).toBe(429);
     expect(error.kind).toBe("rate_limit");
-    expect(isHaltingError(error)).toBe(true);
+    expect(shouldHaltBatch(error)).toBe(true);
   });
 });

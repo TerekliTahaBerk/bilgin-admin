@@ -6,6 +6,7 @@ import type {
 } from "@/contracts/admin/publication";
 import { publishBlockingDetailsSchema } from "@/contracts/admin/publication";
 import { CONTENT_NOT_PUBLISHABLE } from "@/contracts/admin/publication";
+import type { PublishStatus } from "@/contracts/admin/content";
 import type { ApiError } from "@/lib/api/error";
 
 /** Display names for the backend `NodeType` enum. */
@@ -49,11 +50,23 @@ export const readinessStateLabels: Readonly<Record<ReadinessState, string>> = {
   fail: "Yetersiz",
 };
 
+/**
+ * A node worth a second look even though it may pass: its rule only met the
+ * quota with a widened difficulty filter (`relaxed`), or the backend reports
+ * that students are currently served fewer questions than the rule needs
+ * (`live_warning`). Both flags are the backend's; nothing is inferred here.
+ */
+export function nodeHasWarning(preview: NodePreview): boolean {
+  return preview.relaxed || preview.live_warning !== null;
+}
+
 export type ReadinessSummary = Readonly<{
   total: number;
   passing: number;
   relaxed: number;
   failing: number;
+  /** Nodes that answered with `nodeHasWarning`. */
+  warnings: number;
   /** True only when every node has answered and none of them failed. */
   canPublish: boolean;
 }>;
@@ -79,12 +92,62 @@ export function summarizeReadiness(
     passing: previews.length - failing,
     relaxed,
     failing,
+    warnings: previews.filter(nodeHasWarning).length,
     // Vacuously true for a unit with no nodes: the backend gate has nothing to
     // reject there either, and inventing a stricter frontend rule would
     // disable a button the server would have honoured.
     canPublish: previews.length === nodeCount && failing === 0,
   };
 }
+
+/**
+ * Where a unit stands for publishing, as the Publishing Center groups it.
+ *
+ * Every input is a backend answer: the unit's own `status`, and the per-node
+ * `passes`/`relaxed` verdicts of the preview dry run, aggregated by
+ * `summarizeReadiness`. Nothing here decides publishability on its own — the
+ * publish endpoint re-runs the same gate and has the final word.
+ *
+ * - `published`: the backend already reports the unit as published.
+ * - `blocked`: at least one node answered `passes: false`. One failing node
+ *   is enough; the others do not have to be known.
+ * - `unknown`: some node has not answered (not checked yet, still loading,
+ *   or its check failed). Missing evidence is never read as a pass.
+ * - `relaxed`: every node passed, at least one only with a widened filter.
+ * - `ready`: every node passed cleanly (vacuously so with no nodes, exactly
+ *   as the backend gate treats it).
+ */
+export const unitReadinessCategories = [
+  "ready",
+  "relaxed",
+  "blocked",
+  "unknown",
+  "published",
+] as const;
+
+export type UnitReadinessCategory = (typeof unitReadinessCategories)[number];
+
+export function unitReadinessCategory(
+  unitStatus: PublishStatus,
+  summary: ReadinessSummary | null,
+): UnitReadinessCategory {
+  if (unitStatus === "published") return "published";
+  if (summary === null) return "unknown";
+  if (summary.failing > 0) return "blocked";
+  if (!summary.canPublish) return "unknown";
+
+  return summary.relaxed > 0 ? "relaxed" : "ready";
+}
+
+export const unitReadinessCategoryLabels: Readonly<
+  Record<UnitReadinessCategory, string>
+> = {
+  ready: "Yayına hazır",
+  relaxed: "Gevşetilmiş kuralla hazır",
+  blocked: "Bloklanmış",
+  unknown: "Hazırlık durumu bilinmiyor",
+  published: "Zaten yayında",
+};
 
 /** Anchor id a blocking row links to, so the failing step can be reached. */
 export function nodePreviewAnchorId(nodeId: number): string {
