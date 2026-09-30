@@ -1,60 +1,23 @@
 "use client";
 
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo } from "react";
 
-import type {
-  NodePreview,
-  UnitNode,
-  UnitNodesData,
-} from "@/contracts/admin/publication";
-import { publishUnit } from "@/features/content/content-client";
+import type { NodePreview, UnitNode } from "@/contracts/admin/publication";
 import {
-  courseUnitsQueryKey,
-  coursesQueryKey,
-  nodePreviewQueryKey,
-  nodePreviewQueryOptions,
-  unitExercisesQueryPrefix,
-  unitNodesQueryKey,
-  unitNodesQueryOptions,
-} from "@/features/content/content-queries";
+  PublishErrorNotice,
+  PublishPanel,
+} from "@/features/content/publish-panel";
 import {
   difficultyLevelLabels,
   nodePreviewAnchorId,
   nodeTypeLabels,
-  publishBlockingRows,
   readinessState,
-  readinessStateLabels,
-  summarizeReadiness,
-  type ReadinessState,
 } from "@/features/content/readiness";
+import { ReadinessStateBadge } from "@/features/content/readiness-badges";
 import { StatusBadge } from "@/features/content/status-badges";
+import { usePublishUnit } from "@/features/content/use-publish-unit";
+import { useReadinessSnapshots } from "@/features/content/use-readiness-snapshots";
 import type { ApiError } from "@/lib/api/error";
-
-const stateStyles: Readonly<Record<ReadinessState, string>> = {
-  pass: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  relaxed: "border-amber-200 bg-amber-50 text-amber-800",
-  fail: "border-red-200 bg-red-50 text-red-800",
-};
-
-function isApiError(error: unknown): error is ApiError {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as { kind?: unknown }).kind === "string"
-  );
-}
-
-function StateBadge({ state }: { state: ReadinessState }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${stateStyles[state]}`}
-    >
-      {readinessStateLabels[state]}
-    </span>
-  );
-}
 
 function NodeMeta({ node }: { node: UnitNode }) {
   return (
@@ -93,7 +56,7 @@ function NodeRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
-          {state === null ? null : <StateBadge state={state} />}
+          {state === null ? null : <ReadinessStateBadge state={state} />}
           <span className="inline-flex sm:w-20 sm:justify-end">
             <StatusBadge status={node.status} />
           </span>
@@ -123,69 +86,10 @@ function NodeRow({
           · {preview.message}
         </p>
       )}
+      {preview?.live_warning == null ? null : (
+        <p className="mt-1 text-xs text-amber-800">{preview.live_warning}</p>
+      )}
     </li>
-  );
-}
-
-function PublishPanel({
-  canPublish,
-  isPending,
-  nodeCount,
-  onPublish,
-}: {
-  canPublish: boolean;
-  isPending: boolean;
-  nodeCount: number;
-  onPublish: () => void;
-}) {
-  const [isConfirming, setIsConfirming] = useState(false);
-
-  if (!isConfirming) {
-    return (
-      <button
-        className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={!canPublish || isPending}
-        onClick={() => setIsConfirming(true)}
-        type="button"
-      >
-        Üniteyi yayınla
-      </button>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-border bg-surface-muted p-4">
-      <h3 className="text-sm font-semibold">Üniteyi yayınlamak üzeresiniz</h3>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-        <li>Ünite yayına alınır ve öğrencilere görünür olur.</li>
-        <li>{nodeCount} adımın tamamı yayınlanır.</li>
-        <li>
-          Ünitenin arşivlenmemiş soruları (taslak ve incelemedekiler dâhil)
-          yayınlanır.
-        </li>
-        <li>Arşivlenmiş sorular arşivde kalır; yayına dönmez.</li>
-      </ul>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isPending}
-          onClick={() => {
-            setIsConfirming(false);
-            onPublish();
-          }}
-          type="button"
-        >
-          {isPending ? "Yayınlanıyor…" : "Evet, yayınla"}
-        </button>
-        <button
-          className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-muted"
-          onClick={() => setIsConfirming(false)}
-          type="button"
-        >
-          Vazgeç
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -211,67 +115,21 @@ export function UnitReadiness({
   courseId: number;
   unitId: number;
 }) {
-  const queryClient = useQueryClient();
-  const [publishError, setPublishError] = useState<ApiError | null>(null);
-  const [publishedNodes, setPublishedNodes] = useState<number | null>(null);
-
-  const nodesQuery = useQuery<UnitNodesData, ApiError>(
-    unitNodesQueryOptions(unitId),
+  const unitIds = useMemo(() => [unitId], [unitId]);
+  const snapshot = useReadinessSnapshots(unitIds, { enabled: true }).get(
+    unitId,
   );
-  const nodes = nodesQuery.data?.nodes ?? [];
+  const nodes = snapshot?.nodes ?? [];
+  const summary = snapshot?.summary ?? null;
 
-  const previewQueries = useQueries({
-    queries: nodes.map((node) => nodePreviewQueryOptions(node.id)),
+  const publish = usePublishUnit({
+    courseId,
+    unitId,
+    nodeIds: nodes.map((node) => node.id),
   });
+  const publishedNodes = publish.result?.published_nodes ?? null;
 
-  const previews = previewQueries
-    .map((query) => query.data)
-    .filter((preview): preview is NodePreview => preview !== undefined);
-
-  const summary = summarizeReadiness(nodes.length, previews);
-
-  const publishMutation = useMutation({
-    mutationFn: () => publishUnit(unitId),
-    // Publishing is never retried automatically: a second attempt after an
-    // ambiguous failure would republish content the first call may have
-    // already shipped.
-    retry: 0,
-    onSuccess: async (data) => {
-      setPublishError(null);
-      setPublishedNodes(data.published_nodes);
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: coursesQueryKey }),
-        queryClient.invalidateQueries({
-          queryKey: courseUnitsQueryKey(courseId),
-        }),
-        queryClient.invalidateQueries({ queryKey: unitNodesQueryKey(unitId) }),
-        queryClient.invalidateQueries({
-          queryKey: unitExercisesQueryPrefix(unitId),
-        }),
-        // Publishing moves every eligible question to `published`, so each
-        // node's pool changed underneath its cached preview.
-        ...nodes.map((node) =>
-          queryClient.invalidateQueries({
-            queryKey: nodePreviewQueryKey(node.id),
-          }),
-        ),
-      ]);
-    },
-    onError: (error: unknown) => {
-      setPublishedNodes(null);
-      setPublishError(
-        isApiError(error)
-          ? error
-          : { kind: "unknown", status: null, message: "İstek tamamlanamadı." },
-      );
-    },
-  });
-
-  const blocking =
-    publishError === null ? [] : publishBlockingRows(publishError);
-
-  if (nodesQuery.isError) {
+  if (snapshot?.nodesState === "error" && snapshot.nodesError !== null) {
     return (
       <section aria-labelledby="unit-readiness-heading" className="mt-8">
         <h2 className="text-sm font-semibold" id="unit-readiness-heading">
@@ -282,7 +140,7 @@ export function UnitReadiness({
           role="alert"
         >
           <p className="max-w-prose text-sm text-muted">
-            Hazırlık durumu yüklenemedi: {nodesQuery.error.message}
+            Hazırlık durumu yüklenemedi: {snapshot.nodesError.message}
           </p>
         </div>
       </section>
@@ -302,15 +160,16 @@ export function UnitReadiness({
          */}
         {hasPublishAbility ? (
           <PublishPanel
-            canPublish={summary.canPublish}
-            isPending={publishMutation.isPending}
+            canPublish={summary?.canPublish ?? false}
+            isPending={publish.isPending}
             nodeCount={nodes.length}
-            onPublish={() => publishMutation.mutate()}
+            onPublish={publish.publish}
+            warningCount={summary?.warnings ?? 0}
           />
         ) : null}
       </div>
 
-      {nodesQuery.isPending ? (
+      {summary === null ? (
         <p
           aria-busy="true"
           aria-live="polite"
@@ -348,37 +207,12 @@ export function UnitReadiness({
             </div>
           )}
 
-          {publishError === null ? null : (
-            <div
-              className="mt-3 rounded-lg border border-red-200 bg-red-50 p-4"
-              role="alert"
-            >
-              <h3 className="text-sm font-semibold text-red-900">
-                Ünite yayınlanamadı
-              </h3>
-              <p className="mt-1.5 max-w-prose text-sm text-red-800">
-                {publishError.message}
-              </p>
-              {blocking.length === 0 ? null : (
-                <ul className="mt-2 space-y-1 text-sm text-red-800">
-                  {blocking.map((row) => (
-                    <li key={row.node_id}>
-                      {/*
-                       * No node detail route exists, so the link points at
-                       * this page's own readiness row. Inventing a route the
-                       * app does not serve would be a dead link.
-                       */}
-                      <a
-                        className="font-medium underline"
-                        href={`#${nodePreviewAnchorId(row.node_id)}`}
-                      >
-                        {row.node_title}
-                      </a>
-                      : {row.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
+          {publish.error === null ? null : (
+            <div className="mt-3">
+              <PublishErrorNotice
+                blocking={publish.blocking}
+                error={publish.error}
+              />
             </div>
           )}
 
@@ -386,19 +220,17 @@ export function UnitReadiness({
             aria-label="Ünite adımları"
             className="mt-3 divide-y divide-border rounded-lg border border-border bg-surface"
           >
-            {nodes.map((node, index) => {
-              const query = previewQueries[index];
-
-              return (
-                <NodeRow
-                  error={isApiError(query?.error) ? query.error : null}
-                  isPending={query?.isPending ?? true}
-                  key={node.id}
-                  node={node}
-                  preview={query?.data}
-                />
-              );
-            })}
+            {(snapshot?.checks ?? []).map((check) => (
+              <NodeRow
+                error={check.error}
+                isPending={
+                  check.state === "checking" || check.state === "unchecked"
+                }
+                key={check.node.id}
+                node={check.node}
+                preview={check.preview}
+              />
+            ))}
           </ul>
         </>
       )}

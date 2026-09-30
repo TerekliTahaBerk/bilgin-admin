@@ -105,9 +105,11 @@ describe("UnitReadiness states", () => {
       name: "Ünite adımları",
     });
 
-    expect(within(list).getByText("Hazır")).toBeDefined();
-    expect(within(list).getByText("Havuz dar")).toBeDefined();
-    expect(within(list).getByText("Yetersiz")).toBeDefined();
+    // The list renders as soon as the nodes arrive; each row's verdict
+    // follows when its own preview answers.
+    expect(await within(list).findByText("Hazır")).toBeDefined();
+    expect(await within(list).findByText("Havuz dar")).toBeDefined();
+    expect(await within(list).findByText("Yetersiz")).toBeDefined();
   });
 
   it("names the relaxed step as a widened filter, not a plain pass", async () => {
@@ -141,7 +143,9 @@ describe("UnitReadiness states", () => {
 
     const summary = await screen.findByText(/adım hazır/);
 
-    expect(summary.textContent).toContain("2 / 3 adım hazır");
+    await waitFor(() =>
+      expect(summary.textContent).toContain("2 / 3 adım hazır"),
+    );
     expect(summary.textContent).toContain("1 adımda havuz dar");
     expect(summary.textContent).toContain("1 adım yetersiz");
   });
@@ -161,6 +165,46 @@ describe("UnitReadiness states", () => {
     expect(
       screen.getByRole("button", { name: "Üniteyi yayınla" }),
     ).toHaveProperty("disabled", true);
+  });
+
+  it("shows the backend's live warning for a step", async () => {
+    getNodePreview.mockImplementation((nodeId) =>
+      Promise.resolve({
+        ...(previewsById[nodeId] ?? previewsById[101]!),
+        live_warning:
+          nodeId === 101
+            ? "Öğrenciler şu an 2 soru alıyor; 6 gerekiyor."
+            : null,
+      }),
+    );
+
+    renderReadiness();
+
+    expect(
+      await screen.findByText("Öğrenciler şu an 2 soru alıyor; 6 gerekiyor."),
+    ).toBeDefined();
+  });
+
+  it("names relaxed steps as warnings in the confirmation", async () => {
+    const user = userEvent.setup();
+    getNodePreview.mockImplementation((nodeId) =>
+      Promise.resolve({
+        ...(passingPreviewResponse.data as NodePreview),
+        node_id: nodeId,
+        relaxed: nodeId === 102,
+      }),
+    );
+
+    renderReadiness(true);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Üniteyi yayınla" }),
+      ).toHaveProperty("disabled", false),
+    );
+    await user.click(screen.getByRole("button", { name: "Üniteyi yayınla" }));
+
+    expect(screen.getByText(/1 adımda uyarı var/)).toBeDefined();
   });
 
   it("says a unit with no steps has no rule to check", async () => {

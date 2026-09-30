@@ -62,6 +62,9 @@ export const passingPreviewResponse = {
     relaxed: false,
     passes: true,
     message: "Yeterli (9/6).",
+    live_available: 9,
+    live_passes: true,
+    live_warning: null,
   },
   meta: { server_time: "2026-09-20T09:05:20+00:00" },
 };
@@ -76,6 +79,9 @@ export const relaxedPreviewResponse = {
     relaxed: true,
     passes: true,
     message: "Yeterli (4/4) — ancak zorluk filtresi gevşetilerek.",
+    live_available: 4,
+    live_passes: true,
+    live_warning: null,
   },
   meta: { server_time: "2026-09-20T09:05:20+00:00" },
 };
@@ -89,6 +95,9 @@ export const failingPreviewResponse = {
     relaxed: false,
     passes: false,
     message: "Kural 3 soru getiriyor, 10 gerekiyor.",
+    live_available: 3,
+    live_passes: false,
+    live_warning: null,
   },
   meta: { server_time: "2026-09-20T09:05:20+00:00" },
 };

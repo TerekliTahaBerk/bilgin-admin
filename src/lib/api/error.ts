@@ -46,3 +46,30 @@ export function createContractError(status: number | null = null): ApiError {
     message: "Sunucu yanıtı beklenen formatta değil.",
   };
 }
+
+const unknownError: ApiError = {
+  kind: "unknown",
+  status: null,
+  message: "İstek tamamlanamadı.",
+};
+
+/**
+ * Narrows whatever a query or mutation rejected with to an `ApiError`. The
+ * content clients only ever reject with one, so anything else (a thrown
+ * `Error`, a cancelled fetch) becomes a generic "unknown" error rather than
+ * leaking an unshaped value into the UI.
+ */
+export function toApiError(error: unknown): ApiError {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (apiErrorKinds as readonly unknown[]).includes(
+      (error as { kind?: unknown }).kind,
+    ) &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return error as ApiError;
+  }
+
+  return unknownError;
+}

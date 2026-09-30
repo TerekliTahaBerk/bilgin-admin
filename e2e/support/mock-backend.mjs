@@ -410,10 +410,15 @@ const UNIT_NODES_SEED = {
   ],
 };
 
-/** One selection-rule dry run per node id, exactly as the backend reports it. */
+/**
+ * One selection-rule dry run per node id, exactly as the backend reports it.
+ * `live_available` (published questions only) defaults to `available`; node
+ * 1102 serves students fewer than the publish-time count, which is the case
+ * the backend's `live_warning` exists for.
+ */
 const NODE_PREVIEWS_SEED = {
   1101: { required: 6, available: 9, relaxed: false },
-  1102: { required: 4, available: 4, relaxed: true },
+  1102: { required: 4, available: 4, relaxed: true, live_available: 2 },
   1301: { required: 5, available: 5, relaxed: false },
   3101: { required: 6, available: 11, relaxed: false },
   3102: { required: 10, available: 10, relaxed: true },
@@ -430,6 +435,8 @@ function previewFor(node) {
     relaxed: false,
   };
   const passes = counts.available >= counts.required;
+  const liveAvailable = counts.live_available ?? counts.available;
+  const livePasses = liveAvailable >= counts.required;
 
   return {
     node_id: node.id,
@@ -443,6 +450,14 @@ function previewFor(node) {
       : counts.relaxed
         ? `Yeterli (${counts.available}/${counts.required}) — ancak zorluk filtresi gevşetilerek.`
         : `Yeterli (${counts.available}/${counts.required}).`,
+    live_available: liveAvailable,
+    live_passes: livePasses,
+    // Same condition and wording as the backend's previewSelection().
+    live_warning:
+      liveAvailable < counts.available && !livePasses
+        ? `Öğrenciler şu an ${liveAvailable} soru alıyor; ${counts.required} gerekiyor. ` +
+          "Farkı ünitenin yayınlanmamış soruları kapatıyor — yayınlamadan düzelmez."
+        : null,
   };
 }
 

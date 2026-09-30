@@ -57,6 +57,13 @@ export const unitNodesResponseSchema =
  * unusable for reasons no count expresses (an invalid rule, a selection mode
  * with no registered selector), and the backend reports those as `passes:
  * false` with an explanatory message.
+ *
+ * The backend runs the rule twice. `available`/`passes` answer "would this
+ * unit pass if published now" (the publish gate's question, unit drafts
+ * included); the `live_*` fields answer "what do students get right now"
+ * (published questions only). `live_warning` is the backend's own sentence
+ * for the case where the two diverge and only publishing closes the gap —
+ * null otherwise.
  */
 export const nodePreviewSchema = z.object({
   node_id: positiveIdSchema,
@@ -66,6 +73,9 @@ export const nodePreviewSchema = z.object({
   relaxed: z.boolean(),
   passes: z.boolean(),
   message: z.string(),
+  live_available: z.number().int().nonnegative(),
+  live_passes: z.boolean(),
+  live_warning: z.string().nullable(),
 });
 
 export const nodePreviewResponseSchema =

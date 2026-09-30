@@ -2,10 +2,12 @@
 
 import {
   Circle,
+  ClipboardCheck,
   FileJson,
   GraduationCap,
   Home,
   Library,
+  Rocket,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +29,8 @@ import {
 const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   home: Home,
   content: Library,
+  quality: ClipboardCheck,
+  publishing: Rocket,
   import: FileJson,
   curriculum: GraduationCap,
   admins: ShieldCheck,

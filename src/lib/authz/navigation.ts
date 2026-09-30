@@ -22,6 +22,12 @@ export const adminNavigation: readonly NavigationItem[] = [
   // itself internally (`can(admin, "edit_curriculum")`), same as the item
   // below, so the nav entry itself needs no requiredAbility.
   { id: "analytics", label: "Veri Paneli", href: "/analytics" },
+  // Built only from the same content reads (course → unit → exercise lists);
+  // the edit links inside it gate themselves on `edit_content`.
+  { id: "quality", label: "Soru Kalitesi", href: "/quality" },
+  // Readiness reads are open to every admin; the publish buttons inside gate
+  // themselves on `publish_content`, exactly as on the unit page.
+  { id: "publishing", label: "Yayın Merkezi", href: "/publishing" },
   {
     id: "import",
     label: "JSON İçe Aktar",

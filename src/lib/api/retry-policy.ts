@@ -36,3 +36,12 @@ export function shouldRetryQuery(
 
   return failureCount < QUERY_MAX_RETRIES;
 }
+
+/**
+ * For a batch of reads (a catalogue scan, a readiness check across units): an
+ * expired session or a rate limit applies to every remaining request, so the
+ * batch stops instead of reproducing the same failure once per item.
+ */
+export function shouldHaltBatch(error: ApiError): boolean {
+  return error.kind === "authentication" || error.kind === "rate_limit";
+}

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { ApiError } from "@/lib/api/error";
-import { QUERY_MAX_RETRIES, shouldRetryQuery } from "@/lib/api/retry-policy";
+import {
+  QUERY_MAX_RETRIES,
+  shouldHaltBatch,
+  shouldRetryQuery,
+} from "@/lib/api/retry-policy";
 
 function error(kind: ApiError["kind"], status: number | null): ApiError {
   return { kind, status, message: "test" };
@@ -37,5 +41,28 @@ describe("shouldRetryQuery", () => {
   it("does not retry an unrecognised error shape", () => {
     expect(shouldRetryQuery(0, new Error("boom"))).toBe(false);
     expect(shouldRetryQuery(0, undefined)).toBe(false);
+  });
+});
+
+describe("shouldHaltBatch", () => {
+  it("halts only on authentication and rate limit", () => {
+    const error = (kind: ApiError["kind"]): ApiError => ({
+      kind,
+      status: null,
+      message: "x",
+    });
+
+    expect(shouldHaltBatch(error("authentication"))).toBe(true);
+    expect(shouldHaltBatch(error("rate_limit"))).toBe(true);
+    for (const kind of [
+      "authorization",
+      "not_found",
+      "server",
+      "network",
+      "contract",
+      "unknown",
+    ] as const) {
+      expect(shouldHaltBatch(error(kind))).toBe(false);
+    }
   });
 });

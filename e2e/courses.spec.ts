@@ -85,8 +85,9 @@ test("renders the real backend course data", async ({ page }) => {
 
   await expect(page.getByText("İçerik bekliyor")).toHaveCount(2);
 
-  // No exercise totals: /courses does not report them.
-  await expect(page.getByText(/soru/i)).toHaveCount(0);
+  // No exercise totals: /courses does not report them. Scoped to the page
+  // content — the sidebar's "Soru Kalitesi" link is navigation, not a total.
+  await expect(page.getByRole("main").getByText(/soru/i)).toHaveCount(0);
 });
 
 test("links every course row to its real unit list route", async ({ page }) => {
