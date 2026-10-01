@@ -8,6 +8,7 @@ import {
   Home,
   Library,
   Rocket,
+  ScanLine,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   content: Library,
   quality: ClipboardCheck,
   publishing: Rocket,
+  scan: ScanLine,
   import: FileJson,
   curriculum: GraduationCap,
   admins: ShieldCheck,

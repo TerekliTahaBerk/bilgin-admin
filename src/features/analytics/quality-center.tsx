@@ -312,7 +312,9 @@ export function QualityCenter({
         // A new view starts again from the first page.
         key={serializeQualityState(state)}
         onSortChange={changeSort}
-        rows={deferredMatching}
+        // A deferred list that is still empty would flash "0 soru" while
+        // the current filters already match rows; show those instead.
+        rows={deferredMatching.length === 0 ? matching : deferredMatching}
         sort={sort}
       />
     );

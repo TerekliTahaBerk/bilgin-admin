@@ -8,6 +8,7 @@ import { SessionHeartbeat } from "@/components/app-shell/session-heartbeat";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ContentScanProvider } from "@/features/content/content-scan-provider";
 
 type AppShellProps = Readonly<{
   initialAdmin: SafeAdmin;
@@ -42,29 +43,35 @@ export function AppShell({ initialAdmin, children }: AppShellProps) {
     // command palette lives in the Topbar and needs the same QueryClient (and
     // the same `coursesQueryKey` cache) the page content uses.
     <QueryProvider>
-      <div className="min-h-screen bg-background">
-        <SessionHeartbeat onSessionSuccess={handleSessionSuccess} />
+      {/*
+       * The catalogue scan and its snapshot live as long as this signed-in
+       * shell: shared by every page, kept across navigation, gone on sign-out.
+       */}
+      <ContentScanProvider>
+        <div className="min-h-screen bg-background">
+          <SessionHeartbeat onSessionSuccess={handleSessionSuccess} />
 
-        <Sidebar admin={admin} />
+          <Sidebar admin={admin} />
 
-        <MobileNav
-          admin={admin}
-          isOpen={isMobileNavOpen}
-          onClose={closeMobileNav}
-        />
-
-        <div className="flex min-h-screen flex-col md:pl-60 lg:pl-64">
-          <Topbar
+          <MobileNav
             admin={admin}
-            isMobileNavOpen={isMobileNavOpen}
-            onOpenMobileNav={() => setIsMobileNavOpen(true)}
+            isOpen={isMobileNavOpen}
+            onClose={closeMobileNav}
           />
 
-          <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-            <div className="mx-auto w-full max-w-[1520px]">{children}</div>
-          </main>
+          <div className="flex min-h-screen flex-col md:pl-60 lg:pl-64">
+            <Topbar
+              admin={admin}
+              isMobileNavOpen={isMobileNavOpen}
+              onOpenMobileNav={() => setIsMobileNavOpen(true)}
+            />
+
+            <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+              <div className="mx-auto w-full max-w-[1520px]">{children}</div>
+            </main>
+          </div>
         </div>
-      </div>
+      </ContentScanProvider>
     </QueryProvider>
   );
 }

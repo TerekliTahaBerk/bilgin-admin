@@ -28,6 +28,8 @@ export const adminNavigation: readonly NavigationItem[] = [
   // Readiness reads are open to every admin; the publish buttons inside gate
   // themselves on `publish_content`, exactly as on the unit page.
   { id: "publishing", label: "Yayın Merkezi", href: "/publishing" },
+  // Reads the same open content endpoints, so it needs no ability either.
+  { id: "scan", label: "Tam Tarama", href: "/scan" },
   {
     id: "import",
     label: "JSON İçe Aktar",

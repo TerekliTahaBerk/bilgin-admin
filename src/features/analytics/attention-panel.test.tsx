@@ -75,9 +75,7 @@ describe("AttentionPanel", () => {
 
     renderPanel(queryClient);
 
-    expect(
-      screen.getByText("Boş Ünite: henüz soru eklenmemiş."),
-    ).toBeDefined();
+    expect(screen.getByText("Boş Ünite: henüz soru eklenmemiş.")).toBeDefined();
     expect(
       screen.getByRole("link", { name: /Boş Ünite/ }).getAttribute("href"),
     ).toBe("/courses/7/units/10");

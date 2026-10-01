@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { Course, Unit, UnitExercisesData } from "@/contracts/admin/content";
+import type {
+  Course,
+  Unit,
+  UnitExercisesData,
+} from "@/contracts/admin/content";
 import {
   coursesAwaitingContent,
   exercisesNeedingReview,
@@ -51,9 +55,7 @@ describe("coursesAwaitingContent", () => {
   });
 
   it("returns nothing when every course has units", () => {
-    expect(
-      coursesAwaitingContent([course({ unit_count: 3 })]),
-    ).toEqual([]);
+    expect(coursesAwaitingContent([course({ unit_count: 3 })])).toEqual([]);
   });
 });
 

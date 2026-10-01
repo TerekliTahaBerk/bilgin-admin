@@ -57,6 +57,9 @@ describe("optimistic root proxy", () => {
         "/content/:path*",
         "/curriculum",
         "/admins",
+        "/quality",
+        "/publishing",
+        "/scan",
       ],
     });
   });
