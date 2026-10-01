@@ -712,7 +712,10 @@ export const diagramLabelEditableSchema = z
         .min(2, "En az iki etiket yeri tanımlanmalıdır."),
     }),
     answer_key: z.object({
-      labels: z.record(z.string(), z.string().trim().min(1, "Etiket boş olamaz.")),
+      labels: z.record(
+        z.string(),
+        z.string().trim().min(1, "Etiket boş olamaz."),
+      ),
     }),
   })
   .superRefine((value, context) => {
@@ -762,6 +765,39 @@ export const createExerciseRequestSchema = z.discriminatedUnion("type", [
 
 export const updateExerciseRequestSchema = editableExerciseSchema;
 
+/**
+ * A metadata-only PATCH: any of topic, difficulty, scopes and owning unit,
+ * nothing else. The backend's update is partial (its `validatePayload(partial:
+ * true)` makes every field `sometimes`, and omitted content/answer_key fall
+ * back to the stored ones), so these never round-trip — and so never risk
+ * altering — the content or the answer key. Type, content and answer key are
+ * deliberately absent (bulk edits must not reach them), and so is status: the
+ * update endpoint does not accept it. Strict: any other key makes it a full
+ * editor update or a 400.
+ */
+export const exerciseMetadataUpdateSchema = z
+  .object({
+    topic_id: positiveIdSchema.optional(),
+    difficulty: z.number().int().min(1).max(5).optional(),
+    applicable_scopes: z.array(courseScopeSchema).min(1).optional(),
+    owner_unit_id: positiveIdSchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "En az bir alan gerekli.",
+  });
+
+/** The difficulty-only form the calibration assistant sends. */
+export const exerciseDifficultyUpdateSchema = z
+  .object({ difficulty: z.number().int().min(1).max(5) })
+  .strict();
+
+/** What the BFF PATCH accepts: a full editor update or a metadata change. */
+export const exercisePatchRequestSchema = z.union([
+  updateExerciseRequestSchema,
+  exerciseMetadataUpdateSchema,
+]);
+
 export const createExerciseResponseSchema = successEnvelopeSchema(
   z.object({
     id: positiveIdSchema,
@@ -798,6 +834,13 @@ export type ExerciseDetailResponse = z.infer<
 >;
 export type CreateExerciseRequest = z.infer<typeof createExerciseRequestSchema>;
 export type UpdateExerciseRequest = z.infer<typeof updateExerciseRequestSchema>;
+export type ExerciseDifficultyUpdate = z.infer<
+  typeof exerciseDifficultyUpdateSchema
+>;
+export type ExerciseMetadataUpdate = z.infer<
+  typeof exerciseMetadataUpdateSchema
+>;
+export type ExercisePatchRequest = z.infer<typeof exercisePatchRequestSchema>;
 export type CreateExerciseResponse = z.infer<
   typeof createExerciseResponseSchema
 >;

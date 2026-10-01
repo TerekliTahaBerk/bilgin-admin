@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { AdminAccountsData } from "@/contracts/admin/workflows";
 import {
+  adminEditRules,
+  isLastActiveSuperAdmin,
   otherActiveManagerCount,
   wouldDemoteSoloManager,
   wouldLeaveSoloManager,
@@ -149,5 +151,60 @@ describe("wouldDemoteSoloManager", () => {
         "actor",
       ),
     ).toBe(false);
+  });
+});
+
+describe("backend lockout rules, applied up front", () => {
+  const editor = admin({
+    id: "editor",
+    role: "content_editor",
+    role_label: "İçerik Editörü",
+  });
+
+  it("knows the last active super admin", () => {
+    const only = admin({ id: "only" });
+    const inactiveSuper = admin({ id: "off", is_active: false });
+
+    expect(isLastActiveSuperAdmin([only, inactiveSuper, editor], only)).toBe(
+      true,
+    );
+    expect(isLastActiveSuperAdmin([only, admin({ id: "second" })], only)).toBe(
+      false,
+    );
+    expect(isLastActiveSuperAdmin([only, editor], editor)).toBe(false);
+    expect(isLastActiveSuperAdmin([inactiveSuper], inactiveSuper)).toBe(false);
+  });
+
+  it("forbids changing your own role or deactivating yourself", () => {
+    const me = admin({ id: "me" });
+    const rules = adminEditRules([me, admin({ id: "b" })], roles, me, "me");
+
+    expect(rules.deactivateBlocked).toMatch(/Kendi hesabınızı pasif/);
+    expect(rules.roleBlocked).toMatch(/Kendi rolünüzü/);
+    expect([...rules.forbiddenRoles]).toEqual(["content_editor"]);
+  });
+
+  it("keeps the last active super admin active and on the role, whoever acts", () => {
+    const only = admin({ id: "only" });
+    const rules = adminEditRules([only, editor], roles, only, "editor");
+
+    expect(rules.deactivateBlocked).toMatch(/son aktif süper yönetici/);
+    expect(rules.roleBlocked).toBeNull();
+    expect([...rules.forbiddenRoles]).toEqual(["content_editor"]);
+  });
+
+  it("allows everything else", () => {
+    const rules = adminEditRules(
+      [admin({ id: "me" }), admin({ id: "other" }), editor],
+      roles,
+      admin({ id: "other" }),
+      "me",
+    );
+
+    expect(rules).toEqual({
+      deactivateBlocked: null,
+      roleBlocked: null,
+      forbiddenRoles: new Set(),
+    });
   });
 });

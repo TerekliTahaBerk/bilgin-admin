@@ -1,4 +1,5 @@
 import { AdminManager } from "@/features/workflows/admin-manager";
+import { AdminsSubnav } from "@/features/workflows/admins-subnav";
 import { can } from "@/lib/authz/abilities";
 import { requireCurrentAdmin } from "@/lib/session/current";
 
@@ -10,5 +11,10 @@ export default async function AdminsPage() {
         <h1 className="text-xl font-semibold">Bu bölüme erişim yetkiniz yok</h1>
       </div>
     );
-  return <AdminManager currentAdmin={admin} />;
+  return (
+    <>
+      <AdminsSubnav current="accounts" />
+      <AdminManager currentAdmin={admin} />
+    </>
+  );
 }

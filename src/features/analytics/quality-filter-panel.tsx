@@ -14,6 +14,10 @@ import {
   type Unit,
 } from "@/contracts/admin/content";
 import {
+  CALIBRATION_DISCLAIMER,
+  CALIBRATION_MIN_ATTEMPTS,
+} from "@/features/content/difficulty-calibration";
+import {
   hasListFilters,
   type QualityFilters,
 } from "@/features/analytics/quality-filters";
@@ -441,9 +445,30 @@ export const QualityFilterPanel = memo(function QualityFilterPanel({
             Yalnızca düzenlenmiş (sürüm &gt; 1)
           </label>
         </div>
+        <div className="flex items-end pb-1.5">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              checked={filters.calibration === "mismatch"}
+              className="size-4"
+              onChange={(event) =>
+                patch({
+                  calibration: event.target.checked ? "mismatch" : undefined,
+                })
+              }
+              title={CALIBRATION_DISCLAIMER}
+              type="checkbox"
+            />
+            Yalnızca bariz zorluk uyumsuzluğu
+          </label>
+        </div>
       </div>
 
       <p className="mt-3 text-xs text-muted">
+        Zorluk uyumsuzluğu, en az {CALIBRATION_MIN_ATTEMPTS} denemeli soruların
+        doğru oranından üretilen bir frontend sezgiselidir; sorunun zorluğu
+        backend&apos;de tanımlı olandır.
+      </p>
+      <p className="mt-1 text-xs text-muted">
         Doğru oranı veya süre aralığı girildiğinde, henüz çözülmemiş sorular bu
         değerlere sahip olmadığı için listeye dahil edilmez.
       </p>

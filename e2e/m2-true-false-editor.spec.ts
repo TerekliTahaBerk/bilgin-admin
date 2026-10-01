@@ -65,7 +65,13 @@ test("creates a real true/false draft with a false answer and enters edit mode",
     page.getByRole("heading", { name: "Doğru / yanlış sorusunu düzenle" }),
   ).toBeVisible();
   await expect(page.getByText("Tip: Doğru / Yanlış")).toBeVisible();
-  await expect(page.getByText("Taslak")).toBeVisible();
+  // The question inspector repeats the status; the header is checked here.
+  await expect(
+    page
+      .locator("header")
+      .filter({ has: page.getByRole("heading", { level: 1 }) })
+      .getByText("Taslak"),
+  ).toBeVisible();
   await expect(page.getByText("v1")).toBeVisible();
 
   // Re-read the persisted question: the stored answer really is `false`.

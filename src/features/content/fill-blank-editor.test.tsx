@@ -546,7 +546,12 @@ describe("fill blank edit editor", () => {
       (screen.getByLabelText("Boşluk 1 · {{0}}") as HTMLSelectElement).value,
     ).toBe("Töre");
     expect(screen.getByText("v2")).toBeDefined();
-    expect(screen.getByText("Yayında")).toBeDefined();
+    // The inspector repeats the status; the header is what is checked here.
+    expect(
+      within(
+        screen.getByRole("heading", { level: 1 }).closest("header")!,
+      ).getByText("Yayında"),
+    ).toBeDefined();
   });
 
   it("opens a stored question that has no choices in free-text mode", async () => {

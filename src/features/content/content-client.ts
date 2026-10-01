@@ -16,6 +16,7 @@ import {
   type CourseTopicsData,
   type CreateExerciseRequest,
   type ExerciseDetail,
+  type ExerciseMetadataUpdate,
   type UpdateExerciseRequest,
 } from "@/contracts/admin/exercise-editor";
 import {
@@ -286,6 +287,28 @@ export function createExercise(input: CreateExerciseRequest) {
 export function updateExercise(
   exerciseId: number,
   input: UpdateExerciseRequest,
+) {
+  return requestMutation(
+    `/api/admin/exercises/${requireResourceId(exerciseId)}`,
+    "PATCH",
+    input,
+    (body) => {
+      const parsed = updateExercisePayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+  );
+}
+
+/**
+ * Changes only a question's metadata — topic, difficulty, scopes, owning unit
+ * — with a partial PATCH through the same BFF route. Used by the calibration
+ * assistant and bulk edit, each after an explicit confirmation.
+ */
+export function updateExerciseMetadata(
+  exerciseId: number,
+  input: ExerciseMetadataUpdate,
 ) {
   return requestMutation(
     `/api/admin/exercises/${requireResourceId(exerciseId)}`,

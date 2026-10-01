@@ -17,7 +17,7 @@ import {
   type CreateExerciseRequest,
   type CreateExerciseResponse,
   type ExerciseDetailResponse,
-  type UpdateExerciseRequest,
+  type ExercisePatchRequest,
   type UpdateExerciseResponse,
 } from "@/contracts/admin/exercise-editor";
 import {
@@ -212,7 +212,7 @@ export const adminContent = Object.freeze({
 
   updateExercise(
     exerciseId: number,
-    input: UpdateExerciseRequest,
+    input: ExercisePatchRequest,
     backendToken: string,
     options: BackendRequestOptions = {},
   ): Promise<BackendResult<UpdateExerciseResponse>> {

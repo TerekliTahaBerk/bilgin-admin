@@ -1,4 +1,8 @@
 import type { AdminAccountsData } from "@/contracts/admin/workflows";
+import {
+  adminsByRole,
+  SUPER_ADMIN_ROLE,
+} from "@/features/workflows/admin-security";
 
 type Admin = AdminAccountsData["admins"][number];
 type RoleOption = AdminAccountsData["roles"][number];
@@ -11,11 +15,16 @@ type RoleOption = AdminAccountsData["roles"][number];
  */
 export function managerRoleValues(roles: readonly RoleOption[]): Set<string> {
   return new Set(
-    roles.filter((role) => role.abilities.edit_curriculum).map((role) => role.value),
+    roles
+      .filter((role) => role.abilities.edit_curriculum)
+      .map((role) => role.value),
   );
 }
 
-function isActiveManager(admin: Admin, managerRoles: ReadonlySet<string>): boolean {
+function isActiveManager(
+  admin: Admin,
+  managerRoles: ReadonlySet<string>,
+): boolean {
   return admin.is_active && managerRoles.has(admin.role);
 }
 
@@ -74,4 +83,75 @@ export function wouldDemoteSoloManager(
   if (target.id === actorId) return false;
 
   return otherActiveManagerCount(admins, roles, [target.id, actorId]) === 0;
+}
+
+/**
+ * Mirrors the backend's `wouldRemoveLastSuperAdmin`: `target` is the only
+ * active super admin, so the backend refuses to deactivate them or move
+ * them off the role — whoever asks.
+ */
+export function isLastActiveSuperAdmin(
+  admins: readonly Admin[],
+  target: Admin,
+): boolean {
+  const activeSuperAdmins = (
+    adminsByRole(admins).get(SUPER_ADMIN_ROLE) ?? []
+  ).filter((admin) => admin.is_active);
+
+  return (
+    activeSuperAdmins.length === 1 && activeSuperAdmins[0]!.id === target.id
+  );
+}
+
+export type AdminEditRules = Readonly<{
+  /** Why "Pasif yap" is unavailable, or null when it is allowed. */
+  deactivateBlocked: string | null;
+  /** Why the role cannot change at all, or null. */
+  roleBlocked: string | null;
+  /** Role values the backend would refuse for this account. */
+  forbiddenRoles: ReadonlySet<string>;
+}>;
+
+/**
+ * What the backend's lockout rules forbid for `target` when `actorId` acts,
+ * so the screen can disable it up front. The backend still enforces every
+ * rule (ADMIN_LOCKOUT_PREVENTED) — this only spares a request bound to fail.
+ */
+export function adminEditRules(
+  admins: readonly Admin[],
+  roles: readonly RoleOption[],
+  target: Admin,
+  actorId: string,
+): AdminEditRules {
+  if (target.id === actorId) {
+    return {
+      deactivateBlocked:
+        "Kendi hesabınızı pasif yapamazsınız (backend kuralı).",
+      roleBlocked: "Kendi rolünüzü değiştiremezsiniz (backend kuralı).",
+      forbiddenRoles: new Set(
+        roles
+          .map((role) => role.value)
+          .filter((value) => value !== target.role),
+      ),
+    };
+  }
+
+  if (isLastActiveSuperAdmin(admins, target)) {
+    return {
+      deactivateBlocked:
+        "Sistemdeki son aktif süper yönetici pasif yapılamaz (backend kuralı).",
+      roleBlocked: null,
+      forbiddenRoles: new Set(
+        roles
+          .map((role) => role.value)
+          .filter((value) => value !== SUPER_ADMIN_ROLE),
+      ),
+    };
+  }
+
+  return {
+    deactivateBlocked: null,
+    roleBlocked: null,
+    forbiddenRoles: new Set(),
+  };
 }

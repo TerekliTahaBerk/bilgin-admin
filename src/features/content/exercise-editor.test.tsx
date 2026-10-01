@@ -348,7 +348,12 @@ describe("multiple choice edit editor", () => {
       name: "Çoktan seçmeli soruyu düzenle",
     });
     expect(screen.getByText("v3")).toBeDefined();
-    expect(screen.getByText("Yayında")).toBeDefined();
+    // The inspector repeats the status; the header is what is checked here.
+    expect(
+      within(
+        screen.getByRole("heading", { level: 1 }).closest("header")!,
+      ).getByText("Yayında"),
+    ).toBeDefined();
     expect(
       (screen.getByLabelText("a şıkkı metni") as HTMLInputElement).value,
     ).toBe("Asya Hun");

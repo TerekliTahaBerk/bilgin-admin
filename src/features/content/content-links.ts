@@ -27,3 +27,20 @@ export function exerciseHref(
     ? `${unitHref(target.courseId, target.unitId)}/exercises/${target.exerciseId}`
     : unitHref(target.courseId, target.unitId);
 }
+
+export function exerciseEditorHref(
+  courseId: number,
+  unitId: number,
+  exerciseId: number,
+): string {
+  return `${unitHref(courseId, unitId)}/exercises/${exerciseId}`;
+}
+
+/** The "Soruyu çoğalt" page for a question. */
+export function exerciseCloneHref(
+  courseId: number,
+  unitId: number,
+  exerciseId: number,
+): string {
+  return `${exerciseEditorHref(courseId, unitId, exerciseId)}/clone`;
+}

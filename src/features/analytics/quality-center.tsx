@@ -22,7 +22,7 @@ import {
   type QualityViewState,
 } from "@/features/analytics/quality-filters";
 import { QualityList } from "@/features/analytics/quality-list";
-import type { ScanTarget } from "@/features/analytics/quality-scan";
+import { scanTargetForScope } from "@/features/analytics/quality-scan";
 import { QualityScanPanel } from "@/features/analytics/quality-scan-panel";
 import {
   QualityPresetBar,
@@ -212,28 +212,14 @@ export function QualityCenter({
 
   const { start } = scan;
   const startScan = useCallback(
-    ({ refresh }: { refresh: boolean }) => {
-      let target: ScanTarget;
-
-      if (courseId !== undefined && unitId !== undefined) {
-        target = {
-          courseIds: [],
-          units: [
-            {
-              courseId,
-              unitId,
-              title: unit?.title ?? `Ünite #${unitId}`,
-            },
-          ],
-        };
-      } else if (courseId !== undefined) {
-        target = { courseIds: [courseId], units: [] };
-      } else {
-        target = { courseIds: courses.map((item) => item.id), units: [] };
-      }
-
-      start(target, { refresh });
-    },
+    ({ refresh }: { refresh: boolean }) =>
+      start(
+        scanTargetForScope(
+          courses.map((item) => item.id),
+          { courseId, unitId, unitTitle: unit?.title },
+        ),
+        { refresh },
+      ),
     [courseId, unitId, unit, courses, start],
   );
 

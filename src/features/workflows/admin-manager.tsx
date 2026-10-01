@@ -11,12 +11,15 @@ import type {
 import type { SafeAdmin } from "@/contracts/admin/session";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import {
-  wouldDemoteSoloManager,
-  wouldLeaveSoloManager,
-} from "@/features/workflows/admin-lockout";
+  abilityList,
+  AdminAccountCard,
+} from "@/features/workflows/admin-account-card";
+import {
+  ADMIN_ACCOUNTS_QUERY_KEY,
+  adminAccountsQueryOptions,
+} from "@/features/workflows/admin-queries";
 import {
   createAdminAccount,
-  getAdminAccounts,
   updateAdminAccount,
 } from "@/features/workflows/workflow-client";
 import type { ApiError } from "@/lib/api/error";
@@ -38,27 +41,19 @@ const ADMIN_CSV_COLUMNS: readonly CsvColumn<AdminRow>[] = [
         : new Date(admin.last_login_at).toLocaleString("tr-TR"),
   },
 ];
-const abilityLabels = {
-  edit_content: "İçerik düzenleme",
-  publish_content: "Yayınlama",
-  edit_curriculum: "Müfredat/yönetici yönetimi",
-  view_users: "Kullanıcı görüntüleme",
-} as const;
 
 export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
   const queryClient = useQueryClient();
-  const query = useQuery({
-    queryKey: ["admins"],
-    queryFn: getAdminAccounts,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const query = useQuery<AdminAccountsData, ApiError>(
+    adminAccountsQueryOptions(),
+  );
   const [role, setRole] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState("");
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+  // "Son giriş N gün önce" is measured from when the page was opened.
+  const [now] = useState(() => Date.now());
   const selectedRole = query.data?.roles.find((item) => item.value === role);
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["admins"] });
+    await queryClient.invalidateQueries({ queryKey: ADMIN_ACCOUNTS_QUERY_KEY });
   };
   const create = useMutation<unknown, ApiError, CreateAdminRequest>({
     mutationFn: createAdminAccount,
@@ -72,10 +67,7 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
   >({
     mutationFn: ({ id, body }) => updateAdminAccount(id, body),
     retry: 0,
-    onSuccess: async () => {
-      setEditing(null);
-      await refresh();
-    },
+    onSuccess: refresh,
   });
 
   return (
@@ -152,10 +144,7 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
         </select>
         {selectedRole ? (
           <p className="sm:col-span-2 lg:col-span-4 text-sm text-muted">
-            {Object.entries(selectedRole.abilities)
-              .filter(([, enabled]) => enabled)
-              .map(([key]) => abilityLabels[key as keyof typeof abilityLabels])
-              .join(" · ") || "Yetki yok"}
+            {abilityList(selectedRole.abilities)}
           </p>
         ) : null}
         <button
@@ -172,203 +161,43 @@ export function AdminManager({ currentAdmin }: { currentAdmin: SafeAdmin }) {
         ) : null}
       </form>
       <div className="mt-6 space-y-3">
-        {query.data?.admins.map((admin) => {
-          const own = admin.id === currentAdmin.id;
-          const isEditing = editing === admin.id;
-          const roleInfo = query.data.roles.find(
-            (item) => item.value === (isEditing ? editRole : admin.role),
-          );
-          return (
-            <article
-              className="rounded-lg border border-border bg-surface p-4"
-              key={admin.id}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold">{admin.name}</h2>
-                  <p className="text-sm text-muted">{admin.email}</p>
-                  <p className="mt-1 text-xs">
-                    <span
-                      className={
-                        admin.is_active ? "text-emerald-700" : "text-danger"
-                      }
-                    >
-                      {admin.is_active ? "Aktif" : "Pasif"}
-                    </span>{" "}
-                    · {admin.role_label}
-                    {admin.last_login_at
-                      ? ` · Son giriş ${new Date(admin.last_login_at).toLocaleString("tr-TR")}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  {own ? (
-                    <span className="text-xs text-muted">Kendi hesabınız</span>
-                  ) : (
-                    <>
-                      <button
-                        className="text-sm font-semibold text-primary"
-                        onClick={() => {
-                          setEditing(admin.id);
-                          setEditRole(admin.role);
-                        }}
-                        type="button"
-                      >
-                        Düzenle
-                      </button>
-                      {admin.is_active ? (
-                        <button
-                          className="text-sm font-semibold text-danger"
-                          onClick={() => {
-                            const solo =
-                              query.data !== undefined &&
-                              wouldLeaveSoloManager(
-                                query.data.admins,
-                                query.data.roles,
-                                admin,
-                                currentAdmin.id,
-                              );
-                            const message = solo
-                              ? "Bu, yönetici hesaplarını yönetebilecek son kişi olarak sizi tek başınıza bırakacak. Bu yöneticiyi pasif yapmak istiyor musunuz?"
-                              : "Bu yönetici hesabını pasif yapmak istiyor musunuz?";
-
-                            if (window.confirm(message)) {
-                              update.mutate({
-                                id: admin.id,
-                                body: { is_active: false },
-                              });
-                            }
-                          }}
-                          type="button"
-                        >
-                          Pasif yap
-                        </button>
-                      ) : (
-                        <button
-                          className="text-sm font-semibold text-primary"
-                          onClick={() =>
-                            update.mutate({
-                              id: admin.id,
-                              body: { is_active: true },
-                            })
-                          }
-                          type="button"
-                        >
-                          Aktifleştir
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-              {isEditing ? (
-                <form
-                  className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4"
-                  method="post"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const data = new FormData(event.currentTarget);
-                    const password = String(data.get("password") ?? "");
-
-                    const solo =
-                      query.data !== undefined &&
-                      wouldDemoteSoloManager(
-                        query.data.admins,
-                        query.data.roles,
-                        admin,
-                        editRole,
-                        currentAdmin.id,
-                      );
-                    if (
-                      solo &&
-                      !window.confirm(
-                        "Bu rol değişikliği, yönetici hesaplarını yönetebilecek son kişi olarak sizi tek başınıza bırakacak. Devam etmek istiyor musunuz?",
-                      )
-                    ) {
-                      return;
-                    }
-
-                    update.mutate({
-                      id: admin.id,
-                      body: {
-                        name: String(data.get("name")),
-                        role: editRole,
-                        ...(password ? { password } : {}),
-                      },
-                    });
-                  }}
-                >
-                  <label className="text-sm">
-                    Ad
-                    <input
-                      className={`${input} ml-2`}
-                      defaultValue={admin.name}
-                      name="name"
-                      required
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Rol
-                    <select
-                      className={`${input} ml-2`}
-                      onChange={(event) => setEditRole(event.target.value)}
-                      value={editRole}
-                    >
-                      {query.data.roles.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm">
-                    Yeni parola
-                    <input
-                      autoComplete="new-password"
-                      className={`${input} ml-2`}
-                      minLength={12}
-                      name="password"
-                      placeholder="Boşsa değişmez"
-                      type="password"
-                    />
-                  </label>
-                  <button
-                    className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white"
-                    type="submit"
-                  >
-                    Kaydet
-                  </button>
-                  <button
-                    className="text-sm"
-                    onClick={() => setEditing(null)}
-                    type="button"
-                  >
-                    Vazgeç
-                  </button>
-                </form>
-              ) : null}
-              {isEditing && roleInfo ? (
-                <p className="mt-2 text-xs text-muted">
-                  {Object.entries(roleInfo.abilities)
-                    .filter(([, enabled]) => enabled)
-                    .map(
-                      ([key]) =>
-                        abilityLabels[key as keyof typeof abilityLabels],
-                    )
-                    .join(" · ") || "Yetki yok"}
-                </p>
-              ) : null}
-            </article>
-          );
-        })}
+        {query.isPending ? (
+          <p aria-busy="true" className="text-sm text-muted">
+            Yöneticiler yükleniyor…
+          </p>
+        ) : null}
+        {query.isError ? (
+          <p className="text-sm text-danger" role="alert">
+            Yöneticiler yüklenemedi: {query.error.message}
+          </p>
+        ) : null}
+        {query.data?.admins.map((admin) => (
+          <AdminAccountCard
+            admin={admin}
+            currentAdminId={currentAdmin.id}
+            data={query.data}
+            error={
+              update.isError && update.variables?.id === admin.id
+                ? update.error
+                : null
+            }
+            isPending={update.isPending && update.variables?.id === admin.id}
+            key={admin.id}
+            now={now}
+            onUpdate={async (body) => {
+              try {
+                await update.mutateAsync({ id: admin.id, body });
+                setLastSavedId(admin.id);
+                return true;
+              } catch {
+                setLastSavedId(null);
+                return false;
+              }
+            }}
+            saved={lastSavedId === admin.id}
+          />
+        ))}
       </div>
-      {update.isError ? (
-        <p className="mt-4 text-sm text-danger" role="alert">
-          {update.error.code === "ADMIN_LOCKOUT_PREVENTED"
-            ? update.error.message
-            : update.error.message}
-        </p>
-      ) : null}
     </div>
   );
 }

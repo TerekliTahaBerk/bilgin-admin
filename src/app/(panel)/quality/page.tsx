@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import { QualityPage } from "@/features/analytics/quality-page";
@@ -17,6 +18,12 @@ export default async function QualityRoutePage() {
           Deneme sayısı, doğru oranı, çözüm süresi ve sunucunun inceleme
           işaretine göre sorunlu soruları bulun ve doğrudan düzenleyin.
         </p>
+        <Link
+          className="mt-3 inline-flex text-sm font-semibold text-primary hover:underline"
+          href="/quality/unattempted"
+        >
+          Hiç çözülmemiş sorular kuyruğu →
+        </Link>
       </header>
 
       <div className="mt-6">

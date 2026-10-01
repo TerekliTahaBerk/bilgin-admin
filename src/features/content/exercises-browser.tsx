@@ -16,6 +16,7 @@ import {
   courseScopeLabels,
   exerciseTypeLabels,
 } from "@/features/content/content-labels";
+import { exerciseCloneHref } from "@/features/content/content-links";
 import {
   courseUnitsQueryOptions,
   courseUnitsQueryKey,
@@ -40,7 +41,7 @@ import {
   prioritizeNeedsReview,
   topicOptions,
 } from "@/features/content/exercise-list";
-import { archiveSequentially } from "@/features/content/bulk-archive";
+import { BulkEditToolbar } from "@/features/content/bulk-edit-panel";
 import { StatusBadge } from "@/features/content/status-badges";
 import { UnitReadiness } from "@/features/content/unit-readiness";
 import type { ApiError } from "@/lib/api/error";
@@ -81,6 +82,7 @@ function ExerciseRow({
   isArchiving,
   isSelectable,
   isSelected,
+  isSelectionLocked,
   onArchive,
   onToggleSelected,
   unitId,
@@ -91,6 +93,7 @@ function ExerciseRow({
   isArchiving: boolean;
   isSelectable: boolean;
   isSelected: boolean;
+  isSelectionLocked: boolean;
   onArchive: () => void;
   onToggleSelected: () => void;
   unitId: number;
@@ -104,6 +107,7 @@ function ExerciseRow({
             aria-label={`${exercise.preview} sorusunu seç`}
             checked={isSelected}
             className="mt-1 shrink-0"
+            disabled={isSelectionLocked}
             onChange={onToggleSelected}
             type="checkbox"
           />
@@ -151,12 +155,21 @@ function ExerciseRow({
       {canEdit ? (
         <div className="flex gap-3">
           {isSupportedEditorType(exercise.type) ? (
-            <Link
-              className="text-xs font-semibold text-primary hover:underline"
-              href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
-            >
-              Düzenle
-            </Link>
+            <>
+              <Link
+                className="text-xs font-semibold text-primary hover:underline"
+                href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
+              >
+                Düzenle
+              </Link>
+              <Link
+                aria-label={`Soruyu çoğalt: ${exercise.preview}`}
+                className="text-xs font-semibold text-primary hover:underline"
+                href={exerciseCloneHref(courseId, unitId, exercise.id)}
+              >
+                Çoğalt
+              </Link>
+            </>
           ) : null}
           {exercise.status === "archived" ? null : (
             <button
@@ -304,12 +317,8 @@ export function ExercisesBrowser({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(
     new Set(),
   );
-  const [bulkProgress, setBulkProgress] = useState<{
-    completed: number;
-    total: number;
-  } | null>(null);
-  const [bulkFailedCount, setBulkFailedCount] = useState<number | null>(null);
-  const isBulkArchiving = bulkProgress !== null;
+  // True while a bulk action is open: the selection it works on is frozen.
+  const [isBulkLocked, setIsBulkLocked] = useState(false);
 
   function toggleSelected(id: number) {
     setSelectedIds((current) => {
@@ -398,36 +407,10 @@ export function ExercisesBrowser({
     () => selectableIds.filter((id) => selectedIds.has(id)),
     [selectableIds, selectedIds],
   );
-
-  async function handleBulkArchive() {
-    if (activeSelectedIds.length === 0 || isBulkArchiving) return;
-    if (
-      !window.confirm(
-        `${activeSelectedIds.length} soruyu arşivlemek istiyor musunuz? Yeni oturumlar bu soruları kullanmaz; geçmiş kayıtları korunur.`,
-      )
-    ) {
-      return;
-    }
-
-    setBulkFailedCount(null);
-    setBulkProgress({ completed: 0, total: activeSelectedIds.length });
-
-    const result = await archiveSequentially(
-      activeSelectedIds,
-      archiveExercise,
-      (completed, total) => setBulkProgress({ completed, total }),
-    );
-
-    await invalidateAfterArchive(result.succeededIds);
-
-    setBulkProgress(null);
-    setBulkFailedCount(result.failedIds.length);
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      for (const id of result.succeededIds) next.delete(id);
-      return next;
-    });
-  }
+  const selectedExercises = useMemo(
+    () => visible.filter((exercise) => activeSelectedIds.includes(exercise.id)),
+    [visible, activeSelectedIds],
+  );
 
   if (isSessionExpired) {
     return (
@@ -567,49 +550,25 @@ export function ExercisesBrowser({
             </dl>
 
             {canEdit && selectableIds.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-muted px-4 py-2.5">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    aria-label="Görünen tüm soruları seç"
-                    checked={
-                      activeSelectedIds.length === selectableIds.length
-                    }
-                    disabled={isBulkArchiving}
-                    onChange={(event) => {
-                      setSelectedIds(
-                        event.target.checked ? new Set(selectableIds) : new Set(),
-                      );
-                    }}
-                    type="checkbox"
-                  />
-                  Tümünü seç
-                </label>
-                <span className="text-sm text-muted">
-                  {activeSelectedIds.length} soru seçili
-                </span>
-                <button
-                  className="ml-auto rounded-md border border-danger/40 px-3 py-1.5 text-sm font-semibold text-danger transition-colors hover:bg-danger/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={activeSelectedIds.length === 0 || isBulkArchiving}
-                  onClick={() => {
-                    void handleBulkArchive();
-                  }}
-                  type="button"
-                >
-                  {isBulkArchiving
-                    ? `Arşivleniyor… (${bulkProgress?.completed ?? 0}/${bulkProgress?.total ?? 0})`
-                    : `Seçilenleri arşivle (${activeSelectedIds.length})`}
-                </button>
-              </div>
-            ) : null}
-
-            {bulkFailedCount !== null && bulkFailedCount > 0 ? (
-              <p
-                className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger"
-                role="alert"
-              >
-                {bulkFailedCount} soru arşivlenemedi. Kalan soruları tekrar
-                seçip deneyebilirsiniz.
-              </p>
+              <BulkEditToolbar
+                courseId={courseId}
+                onApplied={(ids) =>
+                  setSelectedIds((current) => {
+                    const next = new Set(current);
+                    for (const id of ids) next.delete(id);
+                    return next;
+                  })
+                }
+                onLockChange={setIsBulkLocked}
+                onSelectAll={(all) =>
+                  setSelectedIds(all ? new Set(selectableIds) : new Set())
+                }
+                selectableCount={selectableIds.length}
+                selected={selectedExercises}
+                unitId={unitId}
+                unitTitle={unitTitle}
+                units={unitsQuery.data ?? []}
+              />
             ) : null}
 
             {archiveMutation.isError ? (
@@ -644,6 +603,7 @@ export function ExercisesBrowser({
                   }
                   isSelectable={canEdit && exercise.status !== "archived"}
                   isSelected={selectedIds.has(exercise.id)}
+                  isSelectionLocked={isBulkLocked}
                   key={exercise.id}
                   onArchive={() => {
                     if (

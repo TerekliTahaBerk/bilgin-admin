@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Copy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -35,6 +35,12 @@ import {
   type SupportedEditorType,
 } from "@/contracts/admin/exercise-editor";
 import { courseScopeLabels } from "@/features/content/content-labels";
+import { exerciseCloneHref } from "@/features/content/content-links";
+import { DifficultyCalibration } from "@/features/content/difficulty-calibration-panel";
+import {
+  QuestionInspectorDetails,
+  QuestionInspectorPanel,
+} from "@/features/content/question-inspector";
 import {
   createExercise,
   updateExercise,
@@ -285,6 +291,35 @@ const EDITOR_SECTIONS: Record<
 };
 
 type SaveIntent = "save" | "save-new";
+
+/**
+ * Whether the unsaved form changes a PUBLISHED question's answer key. Both
+ * sides go through the same serializer, so only a real change differs (not
+ * a normalisation). Anything that cannot be serialised yet is "no".
+ */
+function answerKeyEditPending(
+  detail: ExerciseDetail,
+  values: EditorFormValues,
+  isDirty: boolean,
+): boolean {
+  if (!isDirty || detail.status !== "published" || values.topicId === null) {
+    return false;
+  }
+
+  const saved = formValuesFromDetail(detail);
+  if (saved === null || saved.type !== values.type) return false;
+
+  try {
+    const current = serializeUpdateExercise(values).answer_key;
+    const stored = serializeUpdateExercise({
+      ...saved,
+      topicId: values.topicId,
+    }).answer_key;
+    return JSON.stringify(current) !== JSON.stringify(stored);
+  } catch {
+    return false;
+  }
+}
 
 function isApiError(error: unknown): error is ApiError {
   return (
@@ -737,6 +772,25 @@ export function ExerciseEditor({
   const headings = editorTypeHeadings[activeType];
   const section = EDITOR_SECTIONS[activeType];
 
+  const inspector =
+    isEdit && detailQuery.data !== undefined
+      ? {
+          detail: detailQuery.data,
+          version: version ?? detailQuery.data.version,
+          course,
+          unit,
+          topicName: topicsQuery.data?.topics.find(
+            (topic) => topic.id === detailQuery.data.topic_id,
+          )?.name,
+          answerKeyEditPending: answerKeyEditPending(
+            detailQuery.data,
+            values,
+            form.formState.isDirty,
+          ),
+          lastSaveWarning: warning,
+        }
+      : null;
+
   return (
     <div className="space-y-6">
       <header className="border-b border-border pb-5">
@@ -756,10 +810,29 @@ export function ExerciseEditor({
               {course?.name} · {unit?.title}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <span>Tip: {editorTypeLabels[activeType]}</span>
-            <StatusBadge status={status} />
-            {version === null ? null : <span>v{version}</span>}
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <div className="flex items-center gap-3 text-xs text-muted">
+              <span>Tip: {editorTypeLabels[activeType]}</span>
+              <StatusBadge status={status} />
+              {version === null ? null : <span>v{version}</span>}
+            </div>
+            {isEdit && canEdit && exerciseId !== undefined ? (
+              <div className="flex flex-col items-start gap-1 sm:items-end">
+                <Link
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-semibold hover:bg-surface-muted"
+                  href={exerciseCloneHref(courseId, unitId, exerciseId)}
+                >
+                  <Copy aria-hidden="true" className="size-4" />
+                  Soruyu çoğalt
+                </Link>
+                {form.formState.isDirty ? (
+                  <span className="text-xs text-amber-700">
+                    Kopya kayıtlı hâlden yapılır; kaydedilmemiş değişiklikler
+                    kopyaya girmez.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
@@ -807,6 +880,31 @@ export function ExerciseEditor({
           {warning}
         </div>
       )}
+
+      {inspector === null ? null : <QuestionInspectorDetails {...inspector} />}
+
+      {isEdit && exerciseId !== undefined && detailQuery.data !== undefined ? (
+        <DifficultyCalibration
+          blockedReason={
+            form.formState.dirtyFields.difficulty
+              ? "Formdaki kaydedilmemiş zorluk değişikliğini önce kaydedin ya da geri alın."
+              : null
+          }
+          canEdit={canEdit}
+          difficulty={detailQuery.data.difficulty}
+          exerciseId={exerciseId}
+          layout="panel"
+          // The form sends every field on "Kaydet": it must hold the new level,
+          // or the next save would write the old one back. Only this field is
+          // reset, so other unsaved edits stay as they are.
+          onApplied={(difficulty, savedVersionNumber) => {
+            form.resetField("difficulty", { defaultValue: difficulty });
+            setSavedVersion(savedVersionNumber);
+          }}
+          stats={detailQuery.data.stats}
+          unitId={unitId}
+        />
+      ) : null}
 
       {requestError === null ? null : (
         <div
@@ -1011,7 +1109,16 @@ export function ExerciseEditor({
           </div>
         </div>
 
-        <section.Preview values={values} />
+        {/*
+         * The right column: the inspector on top, then the live preview,
+         * which stays sticky within the column as the form scrolls.
+         */}
+        <div className="min-w-0 space-y-6">
+          {inspector === null ? null : (
+            <QuestionInspectorPanel {...inspector} />
+          )}
+          <section.Preview values={values} />
+        </div>
       </form>
     </div>
   );

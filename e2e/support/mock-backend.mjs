@@ -1642,13 +1642,17 @@ const server = createServer(async (request, response) => {
       return;
     }
     const body = await readBody(request);
-    const answerChanged = answerKeyChanged(current.answer_key, body.answer_key);
+    // Partial like the backend: an omitted answer key keeps the stored one.
+    const answerChanged =
+      body.answer_key !== undefined &&
+      answerKeyChanged(current.answer_key, body.answer_key);
     Object.assign(current, body, { version: current.version + 1 });
     for (const exercises of Object.values(EXERCISES)) {
       const row = exercises.find((exercise) => exercise.id === id);
       if (row !== undefined)
         Object.assign(row, {
           preview: previewOf(current),
+          difficulty: current.difficulty,
           version: current.version,
         });
     }

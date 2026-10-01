@@ -59,7 +59,13 @@ test("creates a real multiple-choice draft and enters edit mode", async ({
   await expect(
     page.getByRole("heading", { name: "Çoktan seçmeli soruyu düzenle" }),
   ).toBeVisible();
-  await expect(page.getByText("Taslak")).toBeVisible();
+  // The question inspector repeats the status; the header is checked here.
+  await expect(
+    page
+      .locator("header")
+      .filter({ has: page.getByRole("heading", { level: 1 }) })
+      .getByText("Taslak"),
+  ).toBeVisible();
   await expect(page.getByText("v1")).toBeVisible();
 });
 
