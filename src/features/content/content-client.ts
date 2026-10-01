@@ -16,6 +16,7 @@ import {
   type CourseTopicsData,
   type CreateExerciseRequest,
   type ExerciseDetail,
+  type ExerciseDifficultyUpdate,
   type UpdateExerciseRequest,
 } from "@/contracts/admin/exercise-editor";
 import {
@@ -286,6 +287,27 @@ export function createExercise(input: CreateExerciseRequest) {
 export function updateExercise(
   exerciseId: number,
   input: UpdateExerciseRequest,
+) {
+  return requestMutation(
+    `/api/admin/exercises/${requireResourceId(exerciseId)}`,
+    "PATCH",
+    input,
+    (body) => {
+      const parsed = updateExercisePayloadSchema.safeParse(body);
+      return parsed.success
+        ? { success: true, data: parsed.data.data }
+        : { success: false };
+    },
+  );
+}
+
+/**
+ * Changes only a question's difficulty (a partial PATCH through the same BFF
+ * route). Used by the calibration assistant after an explicit click.
+ */
+export function updateExerciseDifficulty(
+  exerciseId: number,
+  input: ExerciseDifficultyUpdate,
 ) {
   return requestMutation(
     `/api/admin/exercises/${requireResourceId(exerciseId)}`,

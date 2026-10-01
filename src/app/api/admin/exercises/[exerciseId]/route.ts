@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { updateExerciseRequestSchema } from "@/contracts/admin/exercise-editor";
+import { exercisePatchRequestSchema } from "@/contracts/admin/exercise-editor";
 import { parseResourceId } from "@/lib/api/resource-id";
 import { adminContent } from "@/lib/backend/admin-content";
 import { verifyOrigin } from "@/lib/security/verify-origin";
@@ -69,7 +69,7 @@ export async function PATCH(
     return createInvalidRequestResponse();
   }
 
-  const input = updateExerciseRequestSchema.safeParse(body);
+  const input = exercisePatchRequestSchema.safeParse(body);
   if (!input.success) return createInvalidRequestResponse();
 
   const result = await adminContent.updateExercise(

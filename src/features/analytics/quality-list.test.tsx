@@ -1,6 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -22,6 +23,12 @@ import type { QualityRow } from "@/features/analytics/quality-dataset";
 import { toCsv } from "@/lib/export/csv";
 import { qualityRow } from "@/test/fixtures/quality";
 
+// A row whose stats reach the calibration sample renders the difficulty
+// action, which reads the router and the query client.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+}));
+
 const location = {
   course: { id: 3, name: "AYT Fizik" },
   unit: { id: 30, title: "Kuvvet" },
@@ -32,13 +39,15 @@ function renderList(
   { canEdit = true, onSortChange = vi.fn() } = {},
 ) {
   render(
-    <QualityList
-      canEdit={canEdit}
-      isUpdating={false}
-      onSortChange={onSortChange}
-      rows={rows}
-      sort={DEFAULT_QUALITY_SORT}
-    />,
+    <QueryClientProvider client={new QueryClient()}>
+      <QualityList
+        canEdit={canEdit}
+        isUpdating={false}
+        onSortChange={onSortChange}
+        rows={rows}
+        sort={DEFAULT_QUALITY_SORT}
+      />
+    </QueryClientProvider>,
   );
 
   return { onSortChange };
@@ -99,9 +108,9 @@ describe("qualityCsvColumns", () => {
     );
 
     expect(csv.split("\r\n")).toEqual([
-      "Soru no,Ders,Ünite,Önizleme,Tip,Konu,Zorluk,Durum,Sürüm,Kapsamlar,Deneme,Doğru oranı (%),Ortalama süre (sn),İnceleme gerekli",
-      '1,AYT Fizik,Kuvvet,"Soru, virgüllü",Çoktan Seçmeli,İlk Türk Devletleri,3,Yayında,1,TYT,0,,,Hayır',
-      "2,AYT Fizik,Kuvvet,Soru 2,Çoktan Seçmeli,İlk Türk Devletleri,3,Yayında,1,TYT AYT,20,96,9,Evet",
+      "Soru no,Ders,Ünite,Önizleme,Tip,Konu,Zorluk,Durum,Sürüm,Kapsamlar,Deneme,Doğru oranı (%),Ortalama süre (sn),İnceleme gerekli,Performans sinyali (tahmini zorluk)",
+      '1,AYT Fizik,Kuvvet,"Soru, virgüllü",Çoktan Seçmeli,İlk Türk Devletleri,3,Yayında,1,TYT,0,,,Hayır,',
+      "2,AYT Fizik,Kuvvet,Soru 2,Çoktan Seçmeli,İlk Türk Devletleri,3,Yayında,1,TYT AYT,20,96,9,Evet,1",
     ]);
   });
 });

@@ -121,7 +121,7 @@ describe("QualitySummaryTiles", () => {
 });
 
 describe("QualityPresetBar", () => {
-  it("lists 'Tümü' and the ten views", () => {
+  it("lists 'Tümü' and the eleven views", () => {
     render(<QualityPresetBar onChange={vi.fn()} state={scoped} />);
 
     expect(
@@ -138,6 +138,7 @@ describe("QualityPresetBar", () => {
       "En hızlı çözülenler",
       "En çok çözülenler",
       "Düzenlenmiş sorular",
+      "Zorluk uyumsuzluğu",
       "Taslaklar",
       "İncelemedekiler",
     ]);

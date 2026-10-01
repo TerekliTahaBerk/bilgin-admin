@@ -35,6 +35,7 @@ import {
   type SupportedEditorType,
 } from "@/contracts/admin/exercise-editor";
 import { courseScopeLabels } from "@/features/content/content-labels";
+import { DifficultyCalibration } from "@/features/content/difficulty-calibration-panel";
 import {
   createExercise,
   updateExercise,
@@ -807,6 +808,29 @@ export function ExerciseEditor({
           {warning}
         </div>
       )}
+
+      {isEdit && exerciseId !== undefined && detailQuery.data !== undefined ? (
+        <DifficultyCalibration
+          blockedReason={
+            form.formState.dirtyFields.difficulty
+              ? "Formdaki kaydedilmemiş zorluk değişikliğini önce kaydedin ya da geri alın."
+              : null
+          }
+          canEdit={canEdit}
+          difficulty={detailQuery.data.difficulty}
+          exerciseId={exerciseId}
+          layout="panel"
+          // The form sends every field on "Kaydet": it must hold the new level,
+          // or the next save would write the old one back. Only this field is
+          // reset, so other unsaved edits stay as they are.
+          onApplied={(difficulty, savedVersionNumber) => {
+            form.resetField("difficulty", { defaultValue: difficulty });
+            setSavedVersion(savedVersionNumber);
+          }}
+          stats={detailQuery.data.stats}
+          unitId={unitId}
+        />
+      ) : null}
 
       {requestError === null ? null : (
         <div

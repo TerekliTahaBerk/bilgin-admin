@@ -5,6 +5,8 @@ import Link from "next/link";
 import { memo, useState } from "react";
 
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { calibrateDifficulty } from "@/features/content/difficulty-calibration";
+import { DifficultyCalibration } from "@/features/content/difficulty-calibration-panel";
 import type { QualityRow } from "@/features/analytics/quality-dataset";
 import {
   qualitySortKeys,
@@ -82,6 +84,14 @@ export const qualityCsvColumns: readonly CsvColumn<QualityRow>[] = [
   {
     header: "İnceleme gerekli",
     value: (row) => (row.stats.needs_review ? "Evet" : "Hayır"),
+  },
+  // Frontend heuristic; empty below the calibration sample.
+  {
+    header: "Performans sinyali (tahmini zorluk)",
+    value: (row) => {
+      const calibration = calibrateDifficulty(row.difficulty, row.stats);
+      return calibration.kind === "insufficient" ? null : calibration.signal;
+    },
   },
 ];
 
@@ -182,6 +192,15 @@ const QualityRowItem = memo(function QualityRowItem({
           </Link>
         ) : null}
       </div>
+
+      <DifficultyCalibration
+        canEdit={canEdit}
+        difficulty={row.difficulty}
+        exerciseId={row.id}
+        layout="row"
+        stats={row.stats}
+        unitId={row.unit.id}
+      />
     </li>
   );
 });

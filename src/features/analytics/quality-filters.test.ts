@@ -189,7 +189,7 @@ describe("sortQualityRows", () => {
 });
 
 describe("presets", () => {
-  it("defines the ten ready-made views", () => {
+  it("defines the eleven ready-made views", () => {
     expect(qualityPresets.map((preset) => preset.label)).toEqual([
       "İnceleme gerekli",
       "Hiç çözülmemiş",
@@ -199,6 +199,7 @@ describe("presets", () => {
       "En hızlı çözülenler",
       "En çok çözülenler",
       "Düzenlenmiş sorular",
+      "Zorluk uyumsuzluğu",
       "Taslaklar",
       "İncelemedekiler",
     ]);

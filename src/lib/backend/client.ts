@@ -5,7 +5,7 @@ import type { z } from "zod";
 import type { AdminLoginRequest } from "@/contracts/admin/auth";
 import type {
   CreateExerciseRequest,
-  UpdateExerciseRequest,
+  ExercisePatchRequest,
 } from "@/contracts/admin/exercise-editor";
 import type {
   ContentPackage,
@@ -221,7 +221,7 @@ type AdminBackendRequest =
   | Readonly<{
       operation: "updateExercise";
       exerciseId: number;
-      body: UpdateExerciseRequest;
+      body: ExercisePatchRequest;
       backendToken: string;
       signal?: AbortSignal;
     }>

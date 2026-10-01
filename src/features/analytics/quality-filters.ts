@@ -5,6 +5,11 @@ import {
   type PublishStatus,
 } from "@/contracts/admin/content";
 import {
+  CALIBRATION_MIN_ATTEMPTS,
+  hasObviousMismatch,
+  OBVIOUS_MISMATCH_GAP,
+} from "@/features/content/difficulty-calibration";
+import {
   HIGH_CORRECT_RATE_MIN,
   LOW_CORRECT_RATE_MAX,
   type QualityRow,
@@ -41,6 +46,12 @@ export type QualityFilters = Readonly<{
   needsReview?: boolean;
   /** `true` keeps only `version > 1`; `undefined` is "all". */
   edited?: true;
+  /**
+   * `"mismatch"` keeps only questions whose defined difficulty and
+   * performance signal disagree obviously (difficulty-calibration.ts — a
+   * frontend heuristic, never a backend judgement).
+   */
+  calibration?: "mismatch";
 }>;
 
 export const qualitySortKeys = [
@@ -144,6 +155,8 @@ export function applyQualityFilters(
       (filters.needsReview === undefined ||
         stats.needs_review === filters.needsReview) &&
       (filters.edited === undefined || row.version > 1) &&
+      (filters.calibration === undefined ||
+        hasObviousMismatch(row.difficulty, stats)) &&
       inRange(stats.attempts, filters.attemptsMin, filters.attemptsMax) &&
       inNullableRange(stats.correct_rate, filters.rateMin, filters.rateMax) &&
       inNullableRange(stats.avg_seconds, filters.secondsMin, filters.secondsMax)
@@ -203,6 +216,7 @@ export type QualityPresetId =
   | "fastest"
   | "most_attempted"
   | "edited"
+  | "difficulty_mismatch"
   | "drafts"
   | "in_review";
 
@@ -275,6 +289,13 @@ export const qualityPresets: readonly QualityPreset[] = [
     description: "En az bir kez düzenlenmiş (sürüm > 1) sorular.",
     filters: { edited: true },
     sort: { key: "version", direction: "desc" },
+  },
+  {
+    id: "difficulty_mismatch",
+    label: "Zorluk uyumsuzluğu",
+    description: `En az ${CALIBRATION_MIN_ATTEMPTS} denemeli ve tanımlı zorluğu performans sinyalinden en az ${OBVIOUS_MISMATCH_GAP} seviye farklı sorular (frontend sezgiseli).`,
+    filters: { calibration: "mismatch" },
+    sort: { key: "attempts", direction: "desc" },
   },
   {
     id: "drafts",
@@ -401,6 +422,8 @@ export function parseQualityState(params: URLSearchParams): QualityViewState {
     secondsMax: parseBoundedInt(params.get("seconds_max")),
     needsReview: review === "yes" ? true : review === "no" ? false : undefined,
     edited: params.get("edited") === "1" ? true : undefined,
+    calibration:
+      params.get("calibration") === "mismatch" ? "mismatch" : undefined,
   };
   const key = parseSortKey(params.get("sort"));
   const dir = params.get("dir");
@@ -446,6 +469,7 @@ export function serializeQualityState(state: QualityViewState): string {
         : "no",
   );
   set("edited", filters.edited ? "1" : undefined);
+  set("calibration", filters.calibration);
 
   if (
     sort.key !== DEFAULT_QUALITY_SORT.key ||
