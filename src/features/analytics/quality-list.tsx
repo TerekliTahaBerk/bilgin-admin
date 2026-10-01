@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import Link from "next/link";
 import { memo, useState } from "react";
 
-import { isSupportedEditorType } from "@/contracts/admin/exercise-editor";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import type { QualityRow } from "@/features/analytics/quality-dataset";
 import {
@@ -18,6 +17,10 @@ import {
   exerciseTypeLabels,
   publishStatusLabels,
 } from "@/features/content/content-labels";
+import {
+  exerciseHref as exerciseLink,
+  unitHref as unitLink,
+} from "@/features/content/content-links";
 import { StatusBadge } from "@/features/content/status-badges";
 import type { CsvColumn } from "@/lib/export/csv";
 
@@ -41,18 +44,20 @@ export function avgSecondsText(row: QualityRow): string {
 }
 
 export function unitHref(row: QualityRow): string {
-  return `/courses/${row.course.id}/units/${row.unit.id}`;
+  return unitLink(row.course.id, row.unit.id);
 }
 
-/**
- * The editor for admins who can edit a type the editor supports; everyone
- * else gets the unit's question list, which is the read-only detail view
- * (the editor itself shows "no access" to a read-only admin).
- */
+/** See `exerciseHref` in content-links: editor, or the unit's list. */
 export function exerciseHref(row: QualityRow, canEdit: boolean): string {
-  return canEdit && isSupportedEditorType(row.type)
-    ? `${unitHref(row)}/exercises/${row.id}`
-    : unitHref(row);
+  return exerciseLink(
+    {
+      courseId: row.course.id,
+      unitId: row.unit.id,
+      exerciseId: row.id,
+      type: row.type,
+    },
+    canEdit,
+  );
 }
 
 export const qualityCsvColumns: readonly CsvColumn<QualityRow>[] = [

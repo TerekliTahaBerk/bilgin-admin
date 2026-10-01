@@ -27,5 +27,6 @@ export const config = {
     "/quality",
     "/publishing",
     "/scan",
+    "/health",
   ],
 };

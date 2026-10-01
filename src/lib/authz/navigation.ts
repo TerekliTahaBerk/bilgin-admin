@@ -30,6 +30,9 @@ export const adminNavigation: readonly NavigationItem[] = [
   { id: "publishing", label: "Yayın Merkezi", href: "/publishing" },
   // Reads the same open content endpoints, so it needs no ability either.
   { id: "scan", label: "Tam Tarama", href: "/scan" },
+  // Built on the scan snapshot and the open topic reads; edit links inside
+  // gate themselves on `edit_content`.
+  { id: "health", label: "İçerik Sağlığı", href: "/health" },
   {
     id: "import",
     label: "JSON İçe Aktar",
