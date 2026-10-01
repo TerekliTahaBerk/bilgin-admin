@@ -38,6 +38,10 @@ import { courseScopeLabels } from "@/features/content/content-labels";
 import { exerciseCloneHref } from "@/features/content/content-links";
 import { DifficultyCalibration } from "@/features/content/difficulty-calibration-panel";
 import {
+  QuestionInspectorDetails,
+  QuestionInspectorPanel,
+} from "@/features/content/question-inspector";
+import {
   createExercise,
   updateExercise,
 } from "@/features/content/content-client";
@@ -287,6 +291,35 @@ const EDITOR_SECTIONS: Record<
 };
 
 type SaveIntent = "save" | "save-new";
+
+/**
+ * Whether the unsaved form changes a PUBLISHED question's answer key. Both
+ * sides go through the same serializer, so only a real change differs (not
+ * a normalisation). Anything that cannot be serialised yet is "no".
+ */
+function answerKeyEditPending(
+  detail: ExerciseDetail,
+  values: EditorFormValues,
+  isDirty: boolean,
+): boolean {
+  if (!isDirty || detail.status !== "published" || values.topicId === null) {
+    return false;
+  }
+
+  const saved = formValuesFromDetail(detail);
+  if (saved === null || saved.type !== values.type) return false;
+
+  try {
+    const current = serializeUpdateExercise(values).answer_key;
+    const stored = serializeUpdateExercise({
+      ...saved,
+      topicId: values.topicId,
+    }).answer_key;
+    return JSON.stringify(current) !== JSON.stringify(stored);
+  } catch {
+    return false;
+  }
+}
 
 function isApiError(error: unknown): error is ApiError {
   return (
@@ -739,6 +772,25 @@ export function ExerciseEditor({
   const headings = editorTypeHeadings[activeType];
   const section = EDITOR_SECTIONS[activeType];
 
+  const inspector =
+    isEdit && detailQuery.data !== undefined
+      ? {
+          detail: detailQuery.data,
+          version: version ?? detailQuery.data.version,
+          course,
+          unit,
+          topicName: topicsQuery.data?.topics.find(
+            (topic) => topic.id === detailQuery.data.topic_id,
+          )?.name,
+          answerKeyEditPending: answerKeyEditPending(
+            detailQuery.data,
+            values,
+            form.formState.isDirty,
+          ),
+          lastSaveWarning: warning,
+        }
+      : null;
+
   return (
     <div className="space-y-6">
       <header className="border-b border-border pb-5">
@@ -828,6 +880,8 @@ export function ExerciseEditor({
           {warning}
         </div>
       )}
+
+      {inspector === null ? null : <QuestionInspectorDetails {...inspector} />}
 
       {isEdit && exerciseId !== undefined && detailQuery.data !== undefined ? (
         <DifficultyCalibration
@@ -1055,7 +1109,16 @@ export function ExerciseEditor({
           </div>
         </div>
 
-        <section.Preview values={values} />
+        {/*
+         * The right column: the inspector on top, then the live preview,
+         * which stays sticky within the column as the form scrolls.
+         */}
+        <div className="min-w-0 space-y-6">
+          {inspector === null ? null : (
+            <QuestionInspectorPanel {...inspector} />
+          )}
+          <section.Preview values={values} />
+        </div>
       </form>
     </div>
   );
