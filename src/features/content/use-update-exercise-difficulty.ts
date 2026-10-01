@@ -6,7 +6,7 @@ import type {
   ExerciseDetail,
   UpdateExerciseResponse,
 } from "@/contracts/admin/exercise-editor";
-import { updateExerciseDifficulty } from "@/features/content/content-client";
+import { updateExerciseMetadata } from "@/features/content/content-client";
 import {
   exerciseDetailQueryKey,
   nodePreviewQueryPrefix,
@@ -47,7 +47,7 @@ export function useUpdateExerciseDifficulty(
   return useMutation<SavedDifficulty, ApiError, number>({
     mutationFn: async (difficulty) => {
       try {
-        const result = await updateExerciseDifficulty(target.exerciseId, {
+        const result = await updateExerciseMetadata(target.exerciseId, {
           difficulty,
         });
         return { ...result, difficulty };

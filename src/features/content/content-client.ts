@@ -16,7 +16,7 @@ import {
   type CourseTopicsData,
   type CreateExerciseRequest,
   type ExerciseDetail,
-  type ExerciseDifficultyUpdate,
+  type ExerciseMetadataUpdate,
   type UpdateExerciseRequest,
 } from "@/contracts/admin/exercise-editor";
 import {
@@ -302,12 +302,13 @@ export function updateExercise(
 }
 
 /**
- * Changes only a question's difficulty (a partial PATCH through the same BFF
- * route). Used by the calibration assistant after an explicit click.
+ * Changes only a question's metadata — topic, difficulty, scopes, owning unit
+ * — with a partial PATCH through the same BFF route. Used by the calibration
+ * assistant and bulk edit, each after an explicit confirmation.
  */
-export function updateExerciseDifficulty(
+export function updateExerciseMetadata(
   exerciseId: number,
-  input: ExerciseDifficultyUpdate,
+  input: ExerciseMetadataUpdate,
 ) {
   return requestMutation(
     `/api/admin/exercises/${requireResourceId(exerciseId)}`,
