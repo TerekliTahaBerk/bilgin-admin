@@ -34,9 +34,29 @@ vi.mock("@/features/content/content-queries", () => ({
     queryKey: ["content", "courses"],
     queryFn: () =>
       Promise.resolve([
-        { id: 1, code: "tyt_tarih", name: "TYT Tarih", status: "published" },
-        { id: 2, code: "tyt_fizik", name: "TYT Fizik", status: "draft" },
+        {
+          id: 1,
+          code: "tyt_tarih",
+          name: "TYT Tarih",
+          scope: "tyt",
+          status: "published",
+          unit_count: 3,
+        },
+        {
+          id: 2,
+          code: "tyt_fizik",
+          name: "TYT Fizik",
+          scope: "tyt",
+          status: "draft",
+          unit_count: 0,
+        },
       ]),
+  }),
+  // Curriculum health reads each mapped course's units for the
+  // "no published unit" check.
+  courseUnitsQueryOptions: (id: number) => ({
+    queryKey: ["content", "courses", id, "units"],
+    queryFn: () => Promise.resolve([]),
   }),
   courseTopicsQueryOptions: () => ({
     queryKey: ["content", "courses", 1, "topics"],
@@ -289,9 +309,7 @@ describe("remaining workflow components", () => {
     await user.click(
       screen.getByRole("button", { name: "Soldaki pakete ekle" }),
     );
-    expect(
-      await screen.findByText(/soru pakete eklendi/),
-    ).toBeDefined();
+    expect(await screen.findByText(/soru pakete eklendi/)).toBeDefined();
   });
 
   it("shows row errors for an invalid pasted table without producing exercises", async () => {
@@ -312,7 +330,7 @@ describe("remaining workflow components", () => {
     renderWithQuery(<CurriculumManager />);
     await screen.findByRole("option", { name: /Sayısal/ });
     await user.selectOptions(screen.getByLabelText("Sınav varyantı"), "7");
-    const table = await screen.findByRole("table");
+    const table = await screen.findByRole("table", { name: "Ders eşlemesi" });
     expect(within(table).getByRole("option", { name: "TYT" })).toBeDefined();
     expect(
       within(table).queryByRole("option", { name: "Başka sınav" }),
@@ -519,7 +537,12 @@ describe("remaining workflow components", () => {
     );
 
     expect(confirmSpy).toHaveBeenCalledWith(
-      "Bu yönetici hesabını pasif yapmak istiyor musunuz?",
+      expect.stringMatching(
+        /^Bu yönetici hesabını pasif yapmak istiyor musunuz\?/,
+      ),
+    );
+    expect(confirmSpy).not.toHaveBeenCalledWith(
+      expect.stringMatching(/tek başınıza bırakacak/),
     );
   });
 });

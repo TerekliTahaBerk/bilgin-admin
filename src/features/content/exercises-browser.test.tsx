@@ -56,7 +56,14 @@ vi.mock("@/features/content/content-client", () => ({
   getUnitNodes: () => getUnitNodes(),
   getNodePreview: (nodeId: number) => getNodePreview(nodeId),
   publishUnit: () => Promise.reject(new Error("not used in this suite")),
+  updateExerciseMetadata: (exerciseId: number, body: Record<string, unknown>) =>
+    updateExerciseMetadata(exerciseId, body),
 }));
+
+const updateExerciseMetadata =
+  vi.fn<
+    (exerciseId: number, body: Record<string, unknown>) => Promise<unknown>
+  >();
 
 const archiveExercise = vi.fn<(exerciseId: number) => Promise<unknown>>();
 
@@ -140,6 +147,7 @@ beforeEach(() => {
   replace.mockReset();
   refresh.mockReset();
   archiveExercise.mockReset().mockResolvedValue({ id: 1, status: "archived" });
+  updateExerciseMetadata.mockReset().mockResolvedValue({ id: 1, version: 2 });
   onFiltersChange.mockReset();
   onClearFilters.mockReset();
 });
@@ -705,6 +713,12 @@ describe("ExercisesBrowser is read-only", () => {
   });
 });
 
+/** The per-row "Arşivle" buttons (the bulk toolbar has one too). */
+async function rowArchiveButtons() {
+  const list = await screen.findByRole("list", { name: "Sorular" });
+  return within(list).getAllByRole("button", { name: "Arşivle" });
+}
+
 describe("ExercisesBrowser archiving", () => {
   /*
    | A failed archive must not be silent.
@@ -723,9 +737,7 @@ describe("ExercisesBrowser archiving", () => {
 
     renderBrowser({}, true);
 
-    const button = (
-      await screen.findAllByRole("button", { name: "Arşivle" })
-    )[0]!;
+    const button = (await rowArchiveButtons())[0]!;
     await user.click(button);
 
     const alert = await screen.findByRole("alert");
@@ -740,9 +752,7 @@ describe("ExercisesBrowser archiving", () => {
 
     renderBrowser({}, true);
 
-    const button = (
-      await screen.findAllByRole("button", { name: "Arşivle" })
-    )[0]!;
+    const button = (await rowArchiveButtons())[0]!;
     await user.click(button);
 
     await waitFor(() => {
@@ -758,9 +768,7 @@ describe("ExercisesBrowser archiving", () => {
 
     renderBrowser({}, true);
 
-    const button = (
-      await screen.findAllByRole("button", { name: "Arşivle" })
-    )[0]!;
+    const button = (await rowArchiveButtons())[0]!;
     await user.click(button);
 
     expect(confirm).toHaveBeenCalledTimes(1);
@@ -795,66 +803,119 @@ describe("ExercisesBrowser bulk archiving", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(5);
   });
 
-  it("archives every selected exercise in sequence and reports the count", async () => {
+  it("archives every selected exercise after a reviewed confirmation", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     archiveExercise.mockResolvedValue({ id: 1, status: "archived" });
 
     renderBrowser({}, true);
 
     await screen.findByText("(önizleme yok)");
     await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
-
     expect(screen.getByText("4 soru seçili")).toBeDefined();
 
+    const toolbar = screen.getByRole("group", { name: "Toplu işlemler" });
+    await user.click(within(toolbar).getByRole("button", { name: "Arşivle" }));
+
+    // Review: how many, what they are now, what they become.
+    expect(screen.getByText("Etkilenecek soru")).toBeDefined();
+    expect(screen.getByText(/Karışık \(3 farklı değer\)/)).toBeDefined();
+    expect(archiveExercise).not.toHaveBeenCalled();
+
     await user.click(
-      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+      screen.getByRole("button", { name: "Onayla: 4 soruyu arşivle" }),
     );
 
-    await waitFor(() => {
-      expect(archiveExercise).toHaveBeenCalledTimes(4);
-    });
+    expect(await screen.findByText("4 başarılı")).toBeDefined();
     // Every selectable id (1, 2, 3, 5 — not the already-archived 4) was sent.
     expect(archiveExercise.mock.calls.map((call) => call[0]).sort()).toEqual([
       1, 2, 3, 5,
     ]);
   });
 
-  it("keeps going past a failed archive and reports how many failed", async () => {
+  it("reports a partial failure and resends only the failed question", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    archiveExercise
-      .mockResolvedValueOnce({ id: 1, status: "archived" })
-      .mockRejectedValueOnce(new Error("Sunucuya ulaşılamadı."))
-      .mockResolvedValueOnce({ id: 3, status: "archived" })
-      .mockResolvedValueOnce({ id: 5, status: "archived" });
+    archiveExercise.mockImplementation(async (id) => {
+      if (id === 2) throw { kind: "server", status: 500, message: "Sunucu." };
+      return { id, status: "archived" };
+    });
 
     renderBrowser({}, true);
 
     await screen.findByText("(önizleme yok)");
     await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
     await user.click(
-      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+      within(screen.getByRole("group", { name: "Toplu işlemler" })).getByRole(
+        "button",
+        { name: "Arşivle" },
+      ),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Onayla: 4 soruyu arşivle" }),
     );
 
-    expect(
-      await screen.findByText(/1 soru arşivlenemedi/),
-    ).toBeDefined();
+    expect(await screen.findByText("3 başarılı · 1 başarısız")).toBeDefined();
     expect(archiveExercise).toHaveBeenCalledTimes(4);
+
+    archiveExercise
+      .mockClear()
+      .mockResolvedValue({ id: 2, status: "archived" });
+    await user.click(
+      screen.getByRole("button", { name: "Başarısızları tekrar dene (1)" }),
+    );
+
+    expect(await screen.findByText("4 başarılı")).toBeDefined();
+    expect(archiveExercise.mock.calls).toEqual([[2]]);
   });
 
-  it("does not archive anything when the confirmation is declined", async () => {
+  it("sends nothing when the review is left", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
 
     renderBrowser({}, true);
 
     await screen.findByText("(önizleme yok)");
     await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
     await user.click(
-      screen.getByRole("button", { name: /Seçilenleri arşivle/ }),
+      within(screen.getByRole("group", { name: "Toplu işlemler" })).getByRole(
+        "button",
+        { name: "Arşivle" },
+      ),
     );
+    await user.click(screen.getByRole("button", { name: "Geri" }));
 
     expect(archiveExercise).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: "Toplu işlemler" })).toBeDefined();
+  });
+
+  it("changes difficulty only where it differs, with a metadata-only PATCH", async () => {
+    const user = userEvent.setup();
+
+    renderBrowser({}, true);
+
+    await screen.findByText("(önizleme yok)");
+    await user.click(screen.getByLabelText("Görünen tüm soruları seç"));
+    await user.click(
+      within(screen.getByRole("group", { name: "Toplu işlemler" })).getByRole(
+        "button",
+        { name: "Zorluk değiştir" },
+      ),
+    );
+    await user.click(screen.getByRole("radio", { name: "3" }));
+    await user.click(screen.getByRole("button", { name: "Önizle" }));
+
+    // 1 (zorluk 2) and 2 (zorluk 1) change; 3 and 5 are already 3.
+    expect(
+      screen.getByText(/2 soru zaten bu değerde; onlar için istek/),
+    ).toBeDefined();
+    await user.click(
+      screen.getByRole("button", { name: "Onayla: 2 soruyu güncelle" }),
+    );
+
+    expect(await screen.findByText("2 başarılı")).toBeDefined();
+    expect(
+      updateExerciseMetadata.mock.calls.sort((a, b) => a[0] - b[0]),
+    ).toEqual([
+      [1, { difficulty: 3 }],
+      [2, { difficulty: 3 }],
+    ]);
   });
 });

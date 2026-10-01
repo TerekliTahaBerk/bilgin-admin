@@ -68,7 +68,13 @@ test("creates a numeric question whose correct answer is 0 and reopens it", asyn
     page.getByRole("heading", { name: "Sayısal cevap sorusunu düzenle" }),
   ).toBeVisible();
   await expect(page.getByText("Tip: Sayısal cevap")).toBeVisible();
-  await expect(page.getByText("Taslak")).toBeVisible();
+  // The question inspector repeats the status; the header is checked here.
+  await expect(
+    page
+      .locator("header")
+      .filter({ has: page.getByRole("heading", { level: 1 }) })
+      .getByText("Taslak"),
+  ).toBeVisible();
   await expect(page.getByText("v1")).toBeVisible();
 
   // Re-read the persisted question: the stored answer really is 0.

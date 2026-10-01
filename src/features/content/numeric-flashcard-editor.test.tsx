@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -496,7 +496,12 @@ describe("flashcard editor", () => {
       (screen.getByLabelText("Arka yüz") as HTMLTextAreaElement).value,
     ).toContain("Yönetme yetkisinin");
     expect(screen.getByText("v1")).toBeDefined();
-    expect(screen.getByText("Taslak")).toBeDefined();
+    // The inspector repeats the status; the header is what is checked here.
+    expect(
+      within(
+        screen.getByRole("heading", { level: 1 }).closest("header")!,
+      ).getByText("Taslak"),
+    ).toBeDefined();
 
     await user.type(screen.getByLabelText("Ön yüz"), " (kavram)");
     await user.click(saveButton());

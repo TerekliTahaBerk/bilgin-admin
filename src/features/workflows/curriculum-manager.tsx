@@ -370,7 +370,10 @@ export function CurriculumManager() {
             </select>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
+            <table
+              aria-label="Ders eşlemesi"
+              className="w-full min-w-[850px] text-left text-sm"
+            >
               <thead>
                 <tr className="border-b border-border">
                   <th className="p-2">Ders</th>

@@ -86,7 +86,13 @@ test("creates a real fill blank draft from a caret insertion and enters edit mod
     page.getByRole("heading", { name: "Boşluk doldurma sorusunu düzenle" }),
   ).toBeVisible();
   await expect(page.getByText("Tip: Boşluk doldurma")).toBeVisible();
-  await expect(page.getByText("Taslak")).toBeVisible();
+  // The question inspector repeats the status; the header is checked here.
+  await expect(
+    page
+      .locator("header")
+      .filter({ has: page.getByRole("heading", { level: 1 }) })
+      .getByText("Taslak"),
+  ).toBeVisible();
   await expect(page.getByText("v1")).toBeVisible();
 
   // Re-read the persisted question.

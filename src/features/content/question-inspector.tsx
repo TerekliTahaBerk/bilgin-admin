@@ -124,7 +124,8 @@ export function inspectorSignals({
       id: "answer-key-saved",
       tone: "warning",
       title: "Son kayıtta cevap anahtarı değişti",
-      detail: lastSaveWarning,
+      // The backend's own wording is in the banner at the top of the page.
+      detail: "Backend'in uyarısı sayfanın üstünde gösteriliyor.",
     });
   }
   if (stats.needs_review) {
