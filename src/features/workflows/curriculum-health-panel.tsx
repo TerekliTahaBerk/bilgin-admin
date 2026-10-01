@@ -3,7 +3,7 @@
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-import type { Course, Unit } from "@/contracts/admin/content";
+import type { Course } from "@/contracts/admin/content";
 import { publishStatusLabels } from "@/features/content/content-labels";
 import {
   countSignals,
@@ -181,7 +181,9 @@ export function CurriculumHealthOverview({
                 const signals =
                   rows === undefined
                     ? null
-                    : curriculumSignals(variant, rows, sections, courses);
+                    : curriculumSignals(variant, rows, sections, courses, {
+                        mode: "saved",
+                      });
                 const selected = variant.id === selectedId;
 
                 return (
@@ -270,15 +272,16 @@ export function CurriculumHealthOverview({
 }
 
 /**
- * The selected variant's health, computed from the editor's rows — so it
- * follows unsaved edits live — with each row signal linking to its row.
+ * The selected variant's health and pre-save validation, from the editor's
+ * rows — so it follows unsaved edits live — with each row signal linking to
+ * its row. Errors block the save; warnings do not.
  */
 export function VariantHealthDetail({
   variant,
   rows,
   sections,
   courses,
-  unitsByCourse,
+  signals,
   hasUnsavedChanges,
   onFocusCourse,
 }: {
@@ -286,18 +289,11 @@ export function VariantHealthDetail({
   rows: readonly CurriculumRow[];
   sections: readonly CurriculumSection[];
   courses: readonly Course[] | undefined;
-  unitsByCourse: ReadonlyMap<number, readonly Unit[]>;
+  signals: readonly CurriculumSignal[];
   hasUnsavedChanges: boolean;
   onFocusCourse: (courseId: number) => void;
 }) {
   const metrics = variantMetrics(variant, rows, sections, courses);
-  const signals = curriculumSignals(
-    variant,
-    rows,
-    sections,
-    courses,
-    unitsByCourse,
-  );
 
   return (
     <section
@@ -362,8 +358,10 @@ export function VariantHealthDetail({
             >
               <div>
                 <p className="font-medium">
-                  {signal.severity === "error" ? "Hata" : "Uyarı"} ·{" "}
-                  {curriculumSignalLabels[signal.kind]}
+                  {signal.severity === "error"
+                    ? "Hata (kaydı engeller)"
+                    : "Uyarı"}{" "}
+                  · {curriculumSignalLabels[signal.kind]}
                 </p>
                 <p className="text-xs">{signal.message}</p>
               </div>
