@@ -24,5 +24,12 @@ export const config = {
     "/content/:path*",
     "/curriculum",
     "/admins",
+    "/quality",
+    "/publishing",
+    "/scan",
+    "/health",
+    "/coverage",
+    "/analytics",
+    "/analytics/:path*",
   ],
 };

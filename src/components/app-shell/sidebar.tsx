@@ -2,12 +2,15 @@
 
 import {
   Circle,
+  Grid3x3,
   ClipboardCheck,
   FileJson,
   GraduationCap,
+  HeartPulse,
   Home,
   Library,
   Rocket,
+  ScanLine,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +34,9 @@ const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   content: Library,
   quality: ClipboardCheck,
   publishing: Rocket,
+  scan: ScanLine,
+  health: HeartPulse,
+  coverage: Grid3x3,
   import: FileJson,
   curriculum: GraduationCap,
   admins: ShieldCheck,

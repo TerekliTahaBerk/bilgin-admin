@@ -13,6 +13,7 @@ import {
   unitExercisesQueryKey,
 } from "@/features/content/content-queries";
 import type { ExerciseServerFilters } from "@/features/content/exercise-filters";
+import { CONTENT_SCAN_CONCURRENCY } from "@/features/content/content-scan";
 import { qualityUnit, qualityUnitExercises } from "@/test/fixtures/quality";
 
 const getCourseUnits = vi.fn<(courseId: number) => Promise<Unit[]>>();
@@ -133,13 +134,15 @@ describe("useQualityScan", () => {
     const { result, unmount } = setup();
 
     act(() => result.current.start({ courseIds: [1], units: [] }));
-    await waitFor(() => expect(getUnitExercises).toHaveBeenCalledTimes(4));
+    await waitFor(() =>
+      expect(getUnitExercises).toHaveBeenCalledTimes(CONTENT_SCAN_CONCURRENCY),
+    );
 
     unmount();
     for (const release of pending.splice(0)) release();
     await new Promise((done) => setTimeout(done, 10));
 
-    expect(getUnitExercises).toHaveBeenCalledTimes(4);
+    expect(getUnitExercises).toHaveBeenCalledTimes(CONTENT_SCAN_CONCURRENCY);
   });
 
   it("cancels on request and reports it", async () => {
@@ -153,18 +156,20 @@ describe("useQualityScan", () => {
     const { result } = setup();
 
     act(() => result.current.start({ courseIds: [1], units: [] }));
-    await waitFor(() => expect(getUnitExercises).toHaveBeenCalledTimes(4));
+    await waitFor(() =>
+      expect(getUnitExercises).toHaveBeenCalledTimes(CONTENT_SCAN_CONCURRENCY),
+    );
 
+    // Cancelling aborts the requests in flight rather than waiting for them.
     act(() => result.current.cancel());
-    expect(result.current.state.isCancelling).toBe(true);
+
+    await waitFor(() => expect(result.current.state.status).toBe("cancelled"));
+    expect(result.current.state.isCancelling).toBe(false);
 
     await act(async () => {
       for (const release of pending.splice(0)) release();
     });
-
-    await waitFor(() => expect(result.current.state.status).toBe("cancelled"));
-    expect(result.current.state.isCancelling).toBe(false);
-    expect(getUnitExercises).toHaveBeenCalledTimes(4);
+    expect(getUnitExercises).toHaveBeenCalledTimes(CONTENT_SCAN_CONCURRENCY);
   });
 
   it("cancel is a no-op when nothing is running", () => {

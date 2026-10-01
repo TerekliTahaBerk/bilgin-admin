@@ -66,3 +66,30 @@ describe("BarList", () => {
     expect(screen.getByLabelText("TYT Matematik: 5 ünite")).toBeDefined();
   });
 });
+
+describe("BarList measures", () => {
+  it("formats values, fixes the scale and shows details", () => {
+    const { container } = render(
+      <BarList
+        description="Ağırlıklı ortalama."
+        entries={[
+          { id: "a", label: "Zorluk 1", value: 50, detail: "2 soru" },
+          { id: "b", label: "Zorluk 2", value: null },
+        ]}
+        formatValue={(value) => `%${value}`}
+        scaleMax={100}
+        title="Doğru oranı"
+        valueLabel="doğru oranı"
+      />,
+    );
+
+    expect(screen.getByText("Ağırlıklı ortalama.")).toBeDefined();
+    expect(screen.getByLabelText("Zorluk 1: %50 doğru oranı")).toBeDefined();
+    expect(screen.getByLabelText("Zorluk 2: Veri yok")).toBeDefined();
+    expect(screen.getByText("2 soru")).toBeDefined();
+
+    const bars = container.querySelectorAll<HTMLElement>(".bg-primary");
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.style.width).toBe("50%");
+  });
+});

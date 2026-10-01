@@ -18,6 +18,7 @@ import {
   courseUnitsQueryOptions,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
+import { useContentSnapshotIndex } from "@/features/content/content-scan-provider";
 import { toApiError, type ApiError } from "@/lib/api/error";
 
 /** Only the unfiltered list is a complete picture of a unit. */
@@ -74,16 +75,23 @@ export function useQualityDataset(
     combine: combineUnits,
   });
 
+  // The session's full-scan snapshot fills in whatever the live cache does
+  // not hold (yet, or any more). A live cache entry always wins: it is at
+  // least as recent as the snapshot, which was itself read through the cache.
+  const fullScan = useContentSnapshotIndex();
+
   const unitsByCourse = useMemo(() => {
     const map = new Map<number, readonly Unit[]>();
 
     courses.forEach((course, index) => {
-      const data = unitResults[index]?.data;
+      const data =
+        unitResults[index]?.data ??
+        fullScan?.index.unitsByCourse.get(course.id);
       if (data !== undefined) map.set(course.id, data);
     });
 
     return map;
-  }, [courses, unitResults]);
+  }, [courses, unitResults, fullScan]);
 
   const knownUnits = useMemo(
     () =>
@@ -105,12 +113,23 @@ export function useQualityDataset(
     const loaded: LoadedUnitExercises[] = [];
 
     knownUnits.forEach(({ unit }, index) => {
-      const data = exerciseResults[index];
+      const cached = exerciseResults[index];
+      const scanned = fullScan?.index.exercisesByUnit.get(unit.id);
+      const fromScan =
+        // A unit the snapshot read and found empty is still a read unit.
+        fullScan?.index.scannedUnitIds.has(unit.id)
+          ? {
+              unit: { id: unit.id, title: unit.title },
+              exercises: [...(scanned ?? [])],
+            }
+          : undefined;
+      const data = cached ?? fromScan;
+
       if (data !== undefined) loaded.push({ unitId: unit.id, data });
     });
 
     return loaded;
-  }, [knownUnits, exerciseResults]);
+  }, [knownUnits, exerciseResults, fullScan]);
 
   const loadedUnitIds = useMemo(
     () => new Set(lists.map((list) => list.unitId)),

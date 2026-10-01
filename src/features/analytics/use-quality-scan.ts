@@ -15,6 +15,7 @@ import {
   courseUnitsQueryOptions,
   unitExercisesQueryOptions,
 } from "@/features/content/content-queries";
+import { fetchWithAbort } from "@/features/content/scan-fetch";
 import type { ApiError } from "@/lib/api/error";
 
 export type QualityScanState = Readonly<{
@@ -53,14 +54,14 @@ export type QualityScan = Readonly<{
 export function useQualityScan(): QualityScan {
   const queryClient = useQueryClient();
   const [state, setState] = useState<QualityScanState>(IDLE);
-  const runRef = useRef<{ cancelled: boolean } | null>(null);
+  const runRef = useRef<AbortController | null>(null);
   const failuresRef = useRef<readonly ScanFailure[]>([]);
 
   useEffect(
     () => () => {
-      // Leaving the page stops scheduling; in-flight requests still land in
-      // the cache, where the unit browser can use them.
-      if (runRef.current !== null) runRef.current.cancelled = true;
+      // Leaving the page aborts the run: nothing new starts and requests
+      // still in flight are cancelled.
+      runRef.current?.abort();
     },
     [],
   );
@@ -69,7 +70,7 @@ export function useQualityScan(): QualityScan {
     (target: ScanTarget, options: { refresh?: boolean } = {}) => {
       if (runRef.current !== null) return;
 
-      const run = { cancelled: false };
+      const run = new AbortController();
       const staleTime = options.refresh ? 0 : CONTENT_STALE_TIME_MS;
 
       runRef.current = run;
@@ -77,16 +78,20 @@ export function useQualityScan(): QualityScan {
 
       void runQualityScan(target, {
         loadUnits: (courseId) =>
-          queryClient.fetchQuery({
-            ...courseUnitsQueryOptions(courseId),
+          fetchWithAbort(
+            queryClient,
+            courseUnitsQueryOptions(courseId),
             staleTime,
-          }),
+            run.signal,
+          ),
         loadExercises: (unitId) =>
-          queryClient.fetchQuery({
-            ...unitExercisesQueryOptions(unitId, {}),
+          fetchWithAbort(
+            queryClient,
+            unitExercisesQueryOptions(unitId, {}),
             staleTime,
-          }),
-        isCancelled: () => run.cancelled,
+            run.signal,
+          ),
+        signal: run.signal,
         onProgress: (progress) => {
           if (runRef.current === run) {
             setState((current) => ({ ...current, progress }));
@@ -120,7 +125,7 @@ export function useQualityScan(): QualityScan {
   const cancel = useCallback(() => {
     if (runRef.current === null) return;
 
-    runRef.current.cancelled = true;
+    runRef.current.abort();
     setState((current) => ({ ...current, isCancelling: true }));
   }, []);
 

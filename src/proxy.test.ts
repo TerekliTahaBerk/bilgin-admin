@@ -57,6 +57,13 @@ describe("optimistic root proxy", () => {
         "/content/:path*",
         "/curriculum",
         "/admins",
+        "/quality",
+        "/publishing",
+        "/scan",
+        "/health",
+        "/coverage",
+        "/analytics",
+        "/analytics/:path*",
       ],
     });
   });
@@ -64,7 +71,7 @@ describe("optimistic root proxy", () => {
   it("declares no matcher for a route that does not exist yet", () => {
     const matchers = config.matcher as string[];
 
-    for (const absent of ["/units", "/exercises", "/analytics", "/users"]) {
+    for (const absent of ["/units", "/exercises", "/users"]) {
       expect(matchers.some((pattern) => pattern.startsWith(absent))).toBe(
         false,
       );

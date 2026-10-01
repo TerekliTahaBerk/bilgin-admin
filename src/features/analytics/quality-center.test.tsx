@@ -683,22 +683,18 @@ describe("QualityCenter scan", () => {
       await screen.findByRole("button", { name: "Tara (3 ünite)" }),
     );
     await screen.findByText(/Soru listeleri okunuyor/);
+    const started = getUnitExercises.mock.calls.length;
     await user.click(screen.getByRole("button", { name: "Taramayı durdur" }));
 
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "Durduruluyor…",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-
-    for (const release of pending) release();
-
+    // The in-flight requests are aborted, not waited for.
     expect(
       await screen.findByText(
         "Tarama durduruldu. O ana kadar okunan sorular listede.",
       ),
     ).toBeDefined();
+
+    for (const release of pending) release();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(getUnitExercises).toHaveBeenCalledTimes(started);
   });
 });
