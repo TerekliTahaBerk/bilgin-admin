@@ -20,6 +20,36 @@ export type ScanTarget = Readonly<{
   units: readonly ScanUnit[];
 }>;
 
+/**
+ * What "Tara" reads for a course/unit scope: the one unit, the one course,
+ * or every course.
+ */
+export function scanTargetForScope(
+  courseIds: readonly number[],
+  scope: Readonly<{
+    courseId?: number;
+    unitId?: number;
+    unitTitle?: string;
+  }>,
+): ScanTarget {
+  if (scope.courseId !== undefined && scope.unitId !== undefined) {
+    return {
+      courseIds: [],
+      units: [
+        {
+          courseId: scope.courseId,
+          unitId: scope.unitId,
+          title: scope.unitTitle ?? `Ünite #${scope.unitId}`,
+        },
+      ],
+    };
+  }
+
+  return scope.courseId !== undefined
+    ? { courseIds: [scope.courseId], units: [] }
+    : { courseIds, units: [] };
+}
+
 /** A targeted scan never reads the course list, so it cannot fail on it. */
 export type ScanFailure = Exclude<ContentScanFailure, { kind: "courses" }>;
 
