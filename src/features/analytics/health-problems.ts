@@ -10,6 +10,7 @@ import {
   unitHref,
 } from "@/features/content/content-links";
 import type { ContentSnapshot } from "@/features/content/content-snapshot";
+import { topicCoverageRanges } from "@/features/content/topic-coverage";
 
 export type ProblemSeverity = "high" | "medium" | "low";
 
@@ -75,7 +76,7 @@ const severityOrder: Readonly<Record<ProblemSeverity, number>> = {
  * Everything worth a human look in a snapshot, most severe first; within a
  * kind, in catalogue order. Each problem reads one backend field or flag as
  * it is — `unit_count`, `exercise_count`, `node_count`, `needs_review` — and
- * the topic bands from `topicCoverage`.
+ * the app-wide topic coverage bands (`classifyTopicCoverage`).
  */
 export function buildHealthProblems(
   snapshot: ContentSnapshot,
@@ -193,7 +194,7 @@ export function buildHealthProblems(
       add("topic_low_coverage", {
         id: `topic-low-${row.topic.id}`,
         title: row.topic.name,
-        detail: `${row.topic.exercise_count} soru; aynı dersin konularında ortanca ${row.median}.`,
+        detail: `${row.topic.exercise_count} soru (düşük kapsam: ${topicCoverageRanges.low}).`,
         href: `/quality?course=${row.subject.courseId}&topic=${row.topic.id}`,
         linkLabel: "Soruları gör",
       });

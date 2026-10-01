@@ -87,7 +87,7 @@ describe("buildHealthProblems", () => {
       "Yalnızca 2 aktif (arşivlenmemiş) soru var.",
     );
     expect(detail("topic_low_coverage")).toBe(
-      "1 soru; aynı dersin konularında ortanca 10.",
+      "1 soru (düşük kapsam: 1–9 soru).",
     );
   });
 

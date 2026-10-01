@@ -33,6 +33,8 @@ export const adminNavigation: readonly NavigationItem[] = [
   // Built on the scan snapshot and the open topic reads; edit links inside
   // gate themselves on `edit_content`.
   { id: "health", label: "İçerik Sağlığı", href: "/health" },
+  // Topic reads and the scan snapshot; read-only, so no ability needed.
+  { id: "coverage", label: "Kapsama Analizi", href: "/coverage" },
   {
     id: "import",
     label: "JSON İçe Aktar",

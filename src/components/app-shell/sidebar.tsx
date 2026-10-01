@@ -2,6 +2,7 @@
 
 import {
   Circle,
+  Grid3x3,
   ClipboardCheck,
   FileJson,
   GraduationCap,
@@ -35,6 +36,7 @@ const navigationIcons: Readonly<Record<string, LucideIcon>> = {
   publishing: Rocket,
   scan: ScanLine,
   health: HeartPulse,
+  coverage: Grid3x3,
   import: FileJson,
   curriculum: GraduationCap,
   admins: ShieldCheck,

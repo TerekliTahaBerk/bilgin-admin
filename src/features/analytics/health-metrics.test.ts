@@ -33,44 +33,22 @@ describe("topicsBySubject", () => {
 });
 
 describe("topicCoverage", () => {
-  it("bands topics against their subject's median non-zero count", () => {
-    // Non-zero counts 2, 10, 10, 30 → median 10: low < 5, high > 20.
+  it("classifies every topic through the app-wide coverage bands", () => {
     const rows = topicCoverage(
-      topicsBySubject([topicList(1, 1, { 1: 0, 2: 2, 3: 10, 4: 10, 5: 30 })]),
+      topicsBySubject([
+        topicList(1, 1, { 1: 0, 2: 9, 3: 10, 4: 24, 5: 25 }),
+        topicList(2, 2, { 9: 3 }),
+      ]),
     );
 
     expect(rows.map((row) => [row.topic.id, row.coverage])).toEqual([
       [1, "none"],
       [2, "low"],
-      [3, "normal"],
-      [4, "normal"],
-      [5, "high"],
+      [3, "medium"],
+      [4, "medium"],
+      [5, "good"],
+      [9, "low"],
     ]);
-    expect(rows[0]?.median).toBe(10);
-  });
-
-  it("uses an odd-length median and judges subjects separately", () => {
-    const rows = topicCoverage(
-      topicsBySubject([
-        topicList(1, 1, { 1: 1, 2: 4, 3: 100 }),
-        topicList(2, 2, { 9: 50 }),
-      ]),
-    );
-
-    expect(rows.map((row) => [row.topic.id, row.coverage, row.median])).toEqual(
-      [
-        [1, "low", 4],
-        [2, "normal", 4],
-        [3, "high", 4],
-        [9, "normal", 50],
-      ],
-    );
-  });
-
-  it("calls every topic of an empty subject uncovered", () => {
-    const rows = topicCoverage(topicsBySubject([topicList(1, 1, { 1: 0 })]));
-
-    expect(rows).toMatchObject([{ coverage: "none", median: 0 }]);
   });
 });
 
@@ -168,7 +146,7 @@ describe("computeHealthMetrics", () => {
 
   it("counts topic coverage once the lists are there", () => {
     const rows = topicCoverage(
-      topicsBySubject([topicList(1, 1, { 1: 0, 2: 1, 3: 10, 4: 10, 5: 40 })]),
+      topicsBySubject([topicList(1, 1, { 1: 0, 2: 1, 3: 10, 4: 12, 5: 40 })]),
     );
 
     expect(computeHealthMetrics(healthSnapshot(), rows).topics).toEqual({

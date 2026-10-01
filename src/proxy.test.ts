@@ -61,6 +61,7 @@ describe("optimistic root proxy", () => {
         "/publishing",
         "/scan",
         "/health",
+        "/coverage",
       ],
     });
   });

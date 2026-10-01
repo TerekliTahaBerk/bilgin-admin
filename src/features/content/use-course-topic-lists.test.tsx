@@ -22,8 +22,8 @@ vi.mock("@/features/content/content-client", () => ({
     getCourseTopics(courseId, options.signal),
 }));
 
-const { useHealthTopics } =
-  await import("@/features/analytics/use-health-topics");
+const { useCourseTopicLists } =
+  await import("@/features/content/use-course-topic-lists");
 
 function setup(
   courseIds: readonly number[],
@@ -31,7 +31,7 @@ function setup(
     defaultOptions: { queries: { retry: false } },
   }),
 ) {
-  const view = renderHook(() => useHealthTopics(courseIds), {
+  const view = renderHook(() => useCourseTopicLists(courseIds), {
     wrapper: ({ children }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
@@ -48,7 +48,7 @@ beforeEach(() => {
     );
 });
 
-describe("useHealthTopics", () => {
+describe("useCourseTopicLists", () => {
   it("does nothing without courses", async () => {
     const { result } = setup([]);
 

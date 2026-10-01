@@ -8,8 +8,6 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { BarList } from "@/features/analytics/bar-list";
 import {
   computeHealthMetrics,
-  HIGH_TOPIC_COVERAGE_RATIO,
-  LOW_TOPIC_COVERAGE_RATIO,
   LOW_UNIT_EXERCISE_MAX,
   statusDistribution,
   topicCoverage,
@@ -32,10 +30,11 @@ import {
   healthBand,
   type HealthScore,
 } from "@/features/analytics/health-score";
-import { useHealthTopics } from "@/features/analytics/use-health-topics";
+import { useCourseTopicLists } from "@/features/content/use-course-topic-lists";
 import { scanCompletion } from "@/features/content/content-scan";
 import { formatScanTime } from "@/features/content/content-scan-center";
 import { useContentScan } from "@/features/content/content-scan-provider";
+import { topicCoverageRanges } from "@/features/content/topic-coverage";
 import type { ContentSnapshot } from "@/features/content/content-snapshot";
 
 /** Problems rendered per step; the rest wait behind "Daha fazla göster". */
@@ -317,7 +316,7 @@ function MetricSections({
     onRetry: () => void;
   }>;
 }) {
-  const highCoverage = topics.filter((row) => row.coverage === "high");
+  const highCoverage = topics.filter((row) => row.coverage === "good");
 
   return (
     <div className="space-y-8">
@@ -403,9 +402,13 @@ function MetricSections({
         </h2>
         <p className="max-w-prose text-xs text-muted">
           Konu başına soru sayısı sunucunun saydığı tüm sorulardır (her ders ve
-          durum dâhil). Kapsam, aynı dersin konularının ortanca soru sayısına
-          göre değerlendirilir: ortancanın {LOW_TOPIC_COVERAGE_RATIO} katının
-          altı düşük, {HIGH_TOPIC_COVERAGE_RATIO} katının üstü yüksek.
+          durum dâhil). Kapsam bantları uygulama içi bir sınıflandırmadır: düşük{" "}
+          {topicCoverageRanges.low}, orta {topicCoverageRanges.medium}, iyi{" "}
+          {topicCoverageRanges.good}. Ayrıntılı tablo için{" "}
+          <Link className="text-primary underline" href="/coverage">
+            İçerik Kapsama Analizi
+          </Link>
+          .
         </p>
 
         {topicsState.isLoading ? (
@@ -442,12 +445,12 @@ function MetricSections({
                 value={metrics.topics.withoutExercises}
               />
               <Stat label="Düşük kapsam" value={metrics.topics.lowCoverage} />
-              <Stat label="Yüksek kapsam" value={metrics.topics.highCoverage} />
+              <Stat label="İyi kapsam" value={metrics.topics.highCoverage} />
             </dl>
             {highCoverage.length === 0 ? null : (
               <div className="rounded-lg border border-border bg-surface p-4">
                 <h3 className="text-sm font-semibold">
-                  Yüksek kapsamlı konular
+                  İyi kapsamlı konular ({topicCoverageRanges.good})
                 </h3>
                 <ul className="mt-2 space-y-1 text-sm">
                   {highCoverage.map((row) => (
@@ -460,7 +463,7 @@ function MetricSections({
                       </Link>
                       <span className="text-muted">
                         {" "}
-                        · {row.topic.exercise_count} soru (ortanca {row.median})
+                        · {row.topic.exercise_count} soru
                       </span>
                     </li>
                   ))}
@@ -542,7 +545,7 @@ function SnapshotHealth({
     () => snapshot.courses.map((course) => course.id),
     [snapshot],
   );
-  const topicsQuery = useHealthTopics(courseIds);
+  const topicsQuery = useCourseTopicLists(courseIds);
 
   const isSessionExpired = topicsQuery.haltError?.kind === "authentication";
 

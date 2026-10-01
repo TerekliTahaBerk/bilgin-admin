@@ -15,7 +15,7 @@ import { runWithConcurrency } from "@/lib/async/run-with-concurrency";
 import { toApiError, type ApiError } from "@/lib/api/error";
 import { shouldHaltBatch } from "@/lib/api/retry-policy";
 
-export type HealthTopics = Readonly<{
+export type CourseTopicLists = Readonly<{
   /** Topic lists answered so far, in course order. */
   lists: readonly CourseTopicsData[];
   isLoading: boolean;
@@ -35,16 +35,18 @@ function combine(results: QueryObserverResult<CourseTopicsData>[]) {
 }
 
 /**
- * Topic lists for the scanned courses, through the existing
- * `courses/{course}/topics` reads and their shared cache key — the full scan
- * does not read topics, and the backend's per-topic `exercise_count` is the
+ * Topic lists for several courses, through the existing
+ * `courses/{course}/topics` reads and their shared cache key. The full scan
+ * does not read topics; the backend's per-topic `exercise_count` is the
  * authoritative coverage number (it counts every question of the topic, in
- * any course of the subject).
+ * any course of the subject, any status). Used by Health and Coverage.
  *
  * Reads are bounded like the scan's, reuse fresh cache entries, and stop
- * when the page unmounts.
+ * when the page unmounts. Pass a stable array: a new identity re-runs it.
  */
-export function useHealthTopics(courseIds: readonly number[]): HealthTopics {
+export function useCourseTopicLists(
+  courseIds: readonly number[],
+): CourseTopicLists {
   const queryClient = useQueryClient();
   const [haltError, setHaltError] = useState<ApiError | null>(null);
   const [attempt, setAttempt] = useState(0);

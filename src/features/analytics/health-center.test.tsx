@@ -206,6 +206,9 @@ describe("HealthCenter with a snapshot", () => {
       "Uygurlar",
       "TYT Tarih › İlk Çağ",
       "Konu 1",
+      // 6 and 3 questions: under the app-wide "low" band (1–9).
+      "Konu 2",
+      "Konu 5",
     ]);
     expect(
       screen
@@ -411,7 +414,7 @@ describe("HealthCenter with a snapshot", () => {
         "İlk Çağ",
       ),
     );
-    getCourseTopics.mockResolvedValue(topicList(1, 1, { 1: 4, 2: 5 }));
+    getCourseTopics.mockResolvedValue(topicList(1, 1, { 1: 30, 2: 40 }));
 
     renderHealth();
     await scanned(user);
