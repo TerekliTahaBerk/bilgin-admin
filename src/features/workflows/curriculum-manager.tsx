@@ -1,43 +1,67 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
+import type { Unit } from "@/contracts/admin/content";
 import type {
+  CurriculumOptions,
   CurriculumRow,
   UpdateCurriculumRequest,
 } from "@/contracts/admin/workflows";
-import { coursesQueryOptions } from "@/features/content/content-queries";
+import { publishStatusLabels } from "@/features/content/content-labels";
 import {
-  getCurriculumMapping,
-  getCurriculumOptions,
-  updateCurriculum,
-} from "@/features/workflows/workflow-client";
+  courseUnitsQueryOptions,
+  coursesQueryOptions,
+} from "@/features/content/content-queries";
+import {
+  countSignals,
+  curriculumSignals,
+  signalsByCourse,
+} from "@/features/workflows/curriculum-health";
+import {
+  CurriculumHealthOverview,
+  SignalCount,
+  VariantHealthDetail,
+} from "@/features/workflows/curriculum-health-panel";
+import {
+  curriculumMappingQueryKey,
+  curriculumMappingQueryOptions,
+  curriculumOptionsQueryOptions,
+  type CurriculumMapping,
+} from "@/features/workflows/curriculum-queries";
+import { updateCurriculum } from "@/features/workflows/workflow-client";
 import type { ApiError } from "@/lib/api/error";
+
+function rowAnchorId(courseId: number) {
+  return `curriculum-row-${courseId}`;
+}
 
 const inputClass =
   "rounded-md border border-border bg-surface px-2 py-1.5 text-sm";
 
 export function CurriculumManager() {
   const queryClient = useQueryClient();
-  const options = useQuery({
-    queryKey: ["curriculum", "options"],
-    queryFn: getCurriculumOptions,
-    staleTime: 300_000,
-  });
+  const options = useQuery<CurriculumOptions, ApiError>(
+    curriculumOptionsQueryOptions(),
+  );
   const courses = useQuery(coursesQueryOptions());
   const [variantId, setVariantId] = useState<number | null>(null);
   const [draftRows, setDraftRows] = useState<CurriculumRow[] | null>(null);
-  const mapping = useQuery<
-    { exam_variant: { code: string; name: string }; courses: CurriculumRow[] },
-    ApiError
-  >({
-    queryKey: ["curriculum", "mapping", variantId],
-    queryFn: () => getCurriculumMapping(variantId!),
+  const mapping = useQuery<CurriculumMapping, ApiError>({
+    ...curriculumMappingQueryOptions(variantId ?? 0),
     enabled: variantId !== null,
-    refetchOnWindowFocus: false,
   });
-  const rows = draftRows ?? mapping.data?.courses ?? [];
+  const rows = useMemo(
+    () => draftRows ?? mapping.data?.courses ?? [],
+    [draftRows, mapping.data],
+  );
   const variant = options.data?.variants.find((item) => item.id === variantId);
   const sections = useMemo(
     () =>
@@ -57,12 +81,59 @@ export function CurriculumManager() {
     const old = original.find((item) => item.course_id === row.course_id);
     return old && JSON.stringify(old) !== JSON.stringify(row);
   }).length;
+  // The edited variant's courses' unit lists (the content browser's own
+  // entries), for the "no published unit" check.
+  const courseIds = useMemo(
+    () => [...new Set(rows.map((row) => row.course_id))],
+    [rows],
+  );
+  const unitQueries = useQueries({
+    queries: courseIds.map((id) => courseUnitsQueryOptions(id)),
+  }) as UseQueryResult<Unit[], ApiError>[];
+  const unitsByCourse = new Map<number, Unit[]>();
+  courseIds.forEach((id, index) => {
+    const data = unitQueries[index]?.data;
+    if (data !== undefined) unitsByCourse.set(id, data);
+  });
+  const signals =
+    variant === undefined || mapping.data === undefined
+      ? []
+      : curriculumSignals(
+          variant,
+          rows,
+          options.data?.sections ?? [],
+          courses.data,
+          unitsByCourse,
+        );
+  const rowSignals = signalsByCourse(signals);
+  const signalTotals = countSignals(signals);
+
+  function selectVariant(next: number | null) {
+    if (
+      draftRows !== null &&
+      next !== variantId &&
+      !window.confirm(
+        "Kaydedilmemiş değişiklikler var. Başka varyanta geçerseniz kaybolur. Devam edilsin mi?",
+      )
+    ) {
+      return;
+    }
+    setVariantId(next);
+    setDraftRows(null);
+  }
+
+  function focusRow(courseId: number) {
+    const row = document.getElementById(rowAnchorId(courseId));
+    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    row?.focus({ preventScroll: true });
+  }
+
   const mutation = useMutation<unknown, ApiError, UpdateCurriculumRequest>({
     mutationFn: (input) => updateCurriculum(variantId!, input),
     retry: 0,
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["curriculum", "mapping", variantId],
+        queryKey: curriculumMappingQueryKey(variantId!),
       });
     },
   });
@@ -91,16 +162,34 @@ export function CurriculumManager() {
       <p className="mt-1 text-sm text-muted">
         Kaydetme tam değiştirmedir; listede olmayan ders varyanttan kaldırılır.
       </p>
-      <label className="mt-5 block max-w-md text-sm font-medium">
+      <div className="mt-6">
+        {options.isError ? (
+          <p className="text-sm text-danger" role="alert">
+            Sınav varyantları yüklenemedi: {options.error.message}
+          </p>
+        ) : options.data === undefined ? (
+          <p aria-busy="true" className="text-sm text-muted">
+            Varyantlar yükleniyor…
+          </p>
+        ) : (
+          <CurriculumHealthOverview
+            courses={courses.data}
+            onSelect={(id) => selectVariant(id)}
+            sections={options.data.sections}
+            selectedId={variantId}
+            variants={options.data.variants}
+          />
+        )}
+      </div>
+      <label className="mt-8 block max-w-md text-sm font-medium">
         Sınav varyantı
         <select
           className={`${inputClass} mt-1 w-full`}
-          onChange={(event) => {
-            setVariantId(
+          onChange={(event) =>
+            selectVariant(
               event.target.value ? Number(event.target.value) : null,
-            );
-            setDraftRows(null);
-          }}
+            )
+          }
           value={variantId ?? ""}
         >
           <option value="">Varyant seçin</option>
@@ -122,6 +211,17 @@ export function CurriculumManager() {
       ) : null}
       {mapping.data ? (
         <div className="mt-6 space-y-4">
+          {variant === undefined ? null : (
+            <VariantHealthDetail
+              courses={courses.data}
+              hasUnsavedChanges={draftRows !== null}
+              onFocusCourse={focusRow}
+              rows={rows}
+              sections={options.data?.sections ?? []}
+              unitsByCourse={unitsByCourse}
+              variant={variant}
+            />
+          )}
           <div className="flex flex-wrap gap-2">
             <select
               aria-label="Eklenecek ders"
@@ -177,17 +277,31 @@ export function CurriculumManager() {
                   <th>Ağırlık</th>
                   <th>Zorunlu</th>
                   <th>Sıra</th>
+                  <th>Sağlık</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, index) => (
-                  <tr className="border-b border-border" key={row.course_id}>
+                  <tr
+                    className="border-b border-border focus:outline-2 focus:outline-primary"
+                    id={rowAnchorId(row.course_id)}
+                    key={row.course_id}
+                    tabIndex={-1}
+                  >
                     <td className="p-2">
                       <span className="font-medium">{row.name}</span>
                       <br />
                       <span className="text-xs text-muted">
-                        {row.code} · {row.status}
+                        {row.code} · {publishStatusLabels[row.status]}
+                        {(() => {
+                          const course = courses.data?.find(
+                            (item) => item.id === row.course_id,
+                          );
+                          return course === undefined
+                            ? null
+                            : ` · ${course.unit_count} ünite`;
+                        })()}
                       </span>
                     </td>
                     <td>
@@ -260,6 +374,18 @@ export function CurriculumManager() {
                         ↓
                       </button>
                     </td>
+                    <td className="p-2">
+                      <span
+                        title={(rowSignals.get(row.course_id) ?? [])
+                          .map((signal) => signal.message)
+                          .join("\n")}
+                      >
+                        <SignalCount
+                          compact
+                          signals={rowSignals.get(row.course_id) ?? []}
+                        />
+                      </span>
+                    </td>
                     <td>
                       <button
                         className="text-danger"
@@ -299,7 +425,10 @@ export function CurriculumManager() {
             onClick={() => {
               if (
                 !window.confirm(
-                  `${added} eklenen, ${removed} kaldırılan ve ${changed} değişen satırla tam listeyi kaydetmek istiyor musunuz?`,
+                  `${added} eklenen, ${removed} kaldırılan ve ${changed} değişen satırla tam listeyi kaydetmek istiyor musunuz?` +
+                    (signalTotals.errors + signalTotals.warnings > 0
+                      ? `\n\nSağlık kontrolü: ${signalTotals.errors} hata, ${signalTotals.warnings} uyarı.`
+                      : ""),
                 )
               )
                 return;
