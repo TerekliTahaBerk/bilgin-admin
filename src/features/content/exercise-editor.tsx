@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Copy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -35,6 +35,7 @@ import {
   type SupportedEditorType,
 } from "@/contracts/admin/exercise-editor";
 import { courseScopeLabels } from "@/features/content/content-labels";
+import { exerciseCloneHref } from "@/features/content/content-links";
 import { DifficultyCalibration } from "@/features/content/difficulty-calibration-panel";
 import {
   createExercise,
@@ -757,10 +758,29 @@ export function ExerciseEditor({
               {course?.name} · {unit?.title}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <span>Tip: {editorTypeLabels[activeType]}</span>
-            <StatusBadge status={status} />
-            {version === null ? null : <span>v{version}</span>}
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <div className="flex items-center gap-3 text-xs text-muted">
+              <span>Tip: {editorTypeLabels[activeType]}</span>
+              <StatusBadge status={status} />
+              {version === null ? null : <span>v{version}</span>}
+            </div>
+            {isEdit && canEdit && exerciseId !== undefined ? (
+              <div className="flex flex-col items-start gap-1 sm:items-end">
+                <Link
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-semibold hover:bg-surface-muted"
+                  href={exerciseCloneHref(courseId, unitId, exerciseId)}
+                >
+                  <Copy aria-hidden="true" className="size-4" />
+                  Soruyu çoğalt
+                </Link>
+                {form.formState.isDirty ? (
+                  <span className="text-xs text-amber-700">
+                    Kopya kayıtlı hâlden yapılır; kaydedilmemiş değişiklikler
+                    kopyaya girmez.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </header>

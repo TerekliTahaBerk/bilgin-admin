@@ -16,6 +16,7 @@ import {
   courseScopeLabels,
   exerciseTypeLabels,
 } from "@/features/content/content-labels";
+import { exerciseCloneHref } from "@/features/content/content-links";
 import {
   courseUnitsQueryOptions,
   courseUnitsQueryKey,
@@ -154,12 +155,21 @@ function ExerciseRow({
       {canEdit ? (
         <div className="flex gap-3">
           {isSupportedEditorType(exercise.type) ? (
-            <Link
-              className="text-xs font-semibold text-primary hover:underline"
-              href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
-            >
-              Düzenle
-            </Link>
+            <>
+              <Link
+                className="text-xs font-semibold text-primary hover:underline"
+                href={`/courses/${courseId}/units/${unitId}/exercises/${exercise.id}`}
+              >
+                Düzenle
+              </Link>
+              <Link
+                aria-label={`Soruyu çoğalt: ${exercise.preview}`}
+                className="text-xs font-semibold text-primary hover:underline"
+                href={exerciseCloneHref(courseId, unitId, exercise.id)}
+              >
+                Çoğalt
+              </Link>
+            </>
           ) : null}
           {exercise.status === "archived" ? null : (
             <button
