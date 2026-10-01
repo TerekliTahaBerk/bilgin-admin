@@ -1,4 +1,5 @@
 import { AnalyticsDashboard } from "@/features/analytics/analytics-dashboard";
+import { AnalyticsSubnav } from "@/features/analytics/analytics-subnav";
 import { requireCurrentAdmin } from "@/lib/session/current";
 
 export default async function AnalyticsPage() {
@@ -13,6 +14,7 @@ export default async function AnalyticsPage() {
         <p className="mt-1.5 text-sm text-muted">
           Ders kataloğunun ve yönetici kadrosunun anlık dağılımı.
         </p>
+        <AnalyticsSubnav current="overview" />
       </header>
 
       <div className="mt-6">

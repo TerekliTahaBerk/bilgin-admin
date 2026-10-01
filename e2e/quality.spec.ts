@@ -36,6 +36,16 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(`${E2E_BASE_URL}/`);
 }
 
+/*
+ | The scan button. Until a course's unit list loads it reads "Tara (n ünite)";
+ | once it loads, an empty unit (unit 13 has exercise_count 0) already counts
+ | as scanned and the label becomes "Kalanları tara (n ünite)". Which one the
+ | click meets is a race, so both are accepted.
+ */
+function scanButton(page: Page) {
+  return page.getByRole("button", { name: /^(Tara|Kalanları tara) \(/ });
+}
+
 function rows(page: Page) {
   return page.getByRole("list", { name: "Soru listesi" }).locator("li");
 }
@@ -56,7 +66,7 @@ test("scans the catalogue on request and narrows to backend-flagged questions", 
     page.getByText("Bu kapsamda henüz yüklenmiş soru yok."),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /^Tara \(/ }).click();
+  await scanButton(page).click();
   await expect(page.getByText("Tarama tamamlandı.")).toBeVisible();
   await expect(
     page.getByText(/5\/5 ünite tarandı · 5 soru yüklendi/),
@@ -110,7 +120,7 @@ test("keeps the view in the URL and fits a phone screen", async ({ page }) => {
     String(E2E_COURSE_WITH_UNITS_ID),
   );
 
-  await page.getByRole("button", { name: /^Tara \(/ }).click();
+  await scanButton(page).click();
   await expect(page.getByText("Tarama tamamlandı.")).toBeVisible();
   await expect(rows(page)).toHaveCount(5);
 

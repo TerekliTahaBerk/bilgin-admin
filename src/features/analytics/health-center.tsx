@@ -1,6 +1,5 @@
 "use client";
 
-import { RotateCw, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useMemo, useState } from "react";
@@ -31,17 +30,17 @@ import {
   type HealthScore,
 } from "@/features/analytics/health-score";
 import { useCourseTopicLists } from "@/features/content/use-course-topic-lists";
-import { scanCompletion } from "@/features/content/content-scan";
-import { formatScanTime } from "@/features/content/content-scan-center";
 import { useContentScan } from "@/features/content/content-scan-provider";
+import {
+  ScanRequiredNotice,
+  SnapshotSourceBar,
+} from "@/features/content/snapshot-notices";
 import { topicCoverageRanges } from "@/features/content/topic-coverage";
 import type { ContentSnapshot } from "@/features/content/content-snapshot";
 
 /** Problems rendered per step; the rest wait behind "Daha fazla göster". */
 export const PROBLEM_PAGE_SIZE = 30;
 
-const primaryButton =
-  "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
 const secondaryButton =
   "inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -479,59 +478,6 @@ function MetricSections({
 
 /* ----------------------------------------------------------- center -- */
 
-function NoSnapshot() {
-  const { state, start } = useContentScan();
-  const run = state.run;
-  const completion =
-    run?.progress == null ? null : scanCompletion(run.progress, true);
-
-  return (
-    <div className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-base font-semibold">Tam içerik taraması yapılmadı</h2>
-      <p className="mt-1.5 max-w-prose text-sm text-muted">
-        İçerik sağlığı tüm kataloğun taranmış hâline göre hesaplanır. Yalnızca
-        gezilen sayfaların verisiyle bir pano göstermek, sistemin tamamını
-        temsil ediyormuş gibi yanıltıcı olurdu; bu yüzden önce tam tarama
-        gerekir.
-      </p>
-      <div
-        aria-live="polite"
-        className="mt-4 flex flex-wrap items-center gap-3"
-      >
-        {run === null ? (
-          <button
-            className={primaryButton}
-            onClick={() => start()}
-            type="button"
-          >
-            <ScanLine aria-hidden="true" className="size-4" />
-            Taramayı başlat
-          </button>
-        ) : (
-          <p className="text-sm text-muted">
-            Tarama sürüyor
-            {completion === null ? "…" : ` (%${Math.round(completion * 100)})`}
-          </p>
-        )}
-        <Link
-          className="text-sm font-medium text-primary underline"
-          href="/scan"
-        >
-          Tarama ayrıntıları
-        </Link>
-      </div>
-      {state.lastOutcome !== null &&
-      state.lastOutcome.status !== "complete" &&
-      state.lastOutcome.status !== "partial" &&
-      run === null ? (
-        <p className="mt-3 text-sm text-danger" role="alert">
-          Son tarama bir sonuç üretmedi. Ayrıntılar için tarama sayfasına bakın.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function SnapshotHealth({
   snapshot,
   canEdit,
@@ -540,7 +486,6 @@ function SnapshotHealth({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const { state, start } = useContentScan();
   const courseIds = useMemo(
     () => snapshot.courses.map((course) => course.id),
     [snapshot],
@@ -591,36 +536,7 @@ function SnapshotHealth({
 
   return (
     <div className="space-y-6">
-      <section
-        aria-label="Veri kaynağı"
-        className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="text-sm">
-          <p>
-            Veri:{" "}
-            <time className="font-medium" dateTime={snapshot.generatedAt}>
-              {formatScanTime(snapshot.generatedAt)}
-            </time>{" "}
-            tarihli tam tarama
-            {snapshot.status === "partial" ? (
-              <span className="text-danger"> (eksik)</span>
-            ) : null}
-          </p>
-          <p className="mt-0.5 text-xs text-muted">
-            Taramadan sonraki değişiklikler yeniden taranana kadar burada
-            görünmez.
-          </p>
-        </div>
-        <button
-          className={secondaryButton}
-          disabled={state.run !== null}
-          onClick={() => start({ refresh: true })}
-          type="button"
-        >
-          <RotateCw aria-hidden="true" className="size-4" />
-          {state.run === null ? "Yeniden tara" : "Tarama sürüyor…"}
-        </button>
-      </section>
+      <SnapshotSourceBar snapshot={snapshot} />
 
       <HealthProblemList problems={problems} />
 
@@ -649,7 +565,11 @@ export function HealthCenter({ canEdit }: { canEdit: boolean }) {
   const { state } = useContentScan();
 
   return state.snapshot === null ? (
-    <NoSnapshot />
+    <ScanRequiredNotice>
+      İçerik sağlığı tüm kataloğun taranmış hâline göre hesaplanır. Yalnızca
+      gezilen sayfaların verisiyle bir pano göstermek, sistemin tamamını temsil
+      ediyormuş gibi yanıltıcı olurdu; bu yüzden önce tam tarama gerekir.
+    </ScanRequiredNotice>
   ) : (
     <SnapshotHealth canEdit={canEdit} snapshot={state.snapshot} />
   );

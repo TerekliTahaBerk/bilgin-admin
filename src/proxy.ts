@@ -29,5 +29,7 @@ export const config = {
     "/scan",
     "/health",
     "/coverage",
+    "/analytics",
+    "/analytics/:path*",
   ],
 };
